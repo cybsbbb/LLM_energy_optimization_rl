@@ -72,7 +72,7 @@ def benchmark_energy_wrapper(benchmark_config):
         f.write(result.stdout)
     avg_power = energy_metrics.total_energy / energy_metrics.time if energy_metrics.time > 0 else 0
 
-    with open(log_file, "w") as f:
+    with open(log_file, "a") as f:
         f.write(f"Total Energy: {energy_metrics.total_energy} J\n")
         f.write(f"Total Time: {energy_metrics.time} s\n")
         f.write(f"Average Power: {avg_power} W\n")
