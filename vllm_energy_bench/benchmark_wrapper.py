@@ -50,6 +50,9 @@ def benchmark_energy_wrapper(benchmark_config):
         "--profile"
     ]
 
+    print(command)
+    print(' '.join(command))
+
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     log_file = os.path.join(output_dir, f"sharegpt_con{concurrency}_res{request_rate}_in{input_len}_out{output_len}_{timestamp}.log")
 
@@ -84,11 +87,11 @@ if __name__ == "__main__":
     request_rate_values = [1, 2, 4, 8]
     input_len_values = [80, 120, 160, 200, 240]
     output_len_values = [80, 120, 160, 200, 240, 280, 320]
-    benchmark_script = f"{script_dir}/benchmark_serving.py"
-    model_path = f"{script_dir}/../checkpoints/Meta-Llama-3.1-8B"
-    dataset_path = f"{script_dir}/../benchmark_profile/ShareGPT_V3_unfiltered_cleaned_split.json"
+    benchmark_script = os.path.normpath(f"{script_dir}/benchmark_serving.py")
+    model_path = os.path.normpath(f"{script_dir}/../checkpoints/Meta-Llama-3.1-8B")
+    dataset_path = os.path.normpath(f"{script_dir}/../benchmark_profile/ShareGPT_V3_unfiltered_cleaned_split.json")
 
-    output_dir = f"{script_dir}/benchmark_output"
+    output_dir = os.path.normpath(f"{script_dir}/../benchmark_output")
     os.makedirs(output_dir, exist_ok=True)
 
     benchmark_config = dict()
