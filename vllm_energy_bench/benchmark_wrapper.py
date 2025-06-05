@@ -85,8 +85,8 @@ def benchmark_energy_wrapper(benchmark_config):
 if __name__ == "__main__":
     concurrency_values = [4, 8, 12, 16, 20, 24, 28, 32]
     request_rate_values = [1, 2, 4, 8]
-    input_len_values = [80, 120, 160, 200, 240]
-    output_len_values = [80, 120, 160, 200, 240, 280, 320]
+    input_len_values = [80, 120, 160, 200, 240, 280, 320, 360]
+    output_len_values = [80, 120, 160, 200, 240, 280, 320, 360]
     benchmark_script = os.path.normpath(f"{script_dir}/benchmark_serving.py")
     model_path = os.path.normpath(f"{script_dir}/../checkpoints/Meta-Llama-3.1-8B")
     dataset_path = os.path.normpath(f"{script_dir}/../benchmark_profile/ShareGPT_V3_unfiltered_cleaned_split.json")
