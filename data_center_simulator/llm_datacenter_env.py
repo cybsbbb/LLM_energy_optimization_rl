@@ -21,13 +21,14 @@ class LLMDataCenterEnv(gym.Env):
                  time_interval: int = 10,  # 10ms
                  bernoulli_prob: float = 0.2,
                  server_num: int = 200,
-                 max_wait_time: int = 10000,  # 10 seconds
-                 pue: float = 1.3,
+                 max_wait_time: int = 10000,  # 10 seconds, customer will leave after 10s wait
+                 pue: float = 1.3,  # PUE (Power usage effectiveness)
+                 enable_deny: bool = True,  # Option to enable/disable deny action
                  # Reward weights
-                 success_reward: float = 1.0,
+                 success_reward: float = 0.2,
                  deny_penalty: float = -0.2,
                  latency_penalty_weight: float = 0.5,
-                 score_weight: float = 1.0,
+                 score_weight: float = 10.0,
                  energy_penalty_weight: float = 0.3,
                  render_mode: Optional[str] = None,
                  seed: Optional[int] = None):
@@ -41,6 +42,7 @@ class LLMDataCenterEnv(gym.Env):
         self.server_num = server_num
         self.max_wait_time = max_wait_time
         self.pue = pue
+        self.enable_deny = enable_deny
         self.render_mode = render_mode
 
         # Reward parameters
@@ -56,8 +58,11 @@ class LLMDataCenterEnv(gym.Env):
         self.five_minutes_ms = 300 * 1000
         self.j2mwh = 3_600_000_000
 
-        # Action space: 6 different KV cache configurations + 1 deny action
-        self.action_space = spaces.Discrete(7)
+        # Action space: 6 KV cache configurations + optional deny action
+        self.n_actions = 7 if enable_deny else 6
+        self.action_space = spaces.Discrete(self.n_actions)
+
+        # Build action mapping
         self.action_to_kv_size = {
             0: 'fullkv',
             1: 'snapkv_64',
@@ -65,8 +70,9 @@ class LLMDataCenterEnv(gym.Env):
             3: 'snapkv_256',
             4: 'snapkv_512',
             5: 'snapkv_1024',
-            6: 'deny'  # Immediate deny action
         }
+        if enable_deny:
+            self.action_to_kv_size[6] = 'deny'
 
         # Observation space
         self.observation_space = spaces.Dict({
@@ -117,13 +123,26 @@ class LLMDataCenterEnv(gym.Env):
         self.episode_reward = 0
         self.episode_length = 0
 
+        # Action statistics
+        self.action_counts = {i: 0 for i in range(self.n_actions)}
+        self.action_names = {
+            0: 'fullkv',
+            1: 'snapkv_64',
+            2: 'snapkv_128',
+            3: 'snapkv_256',
+            4: 'snapkv_512',
+            5: 'snapkv_1024',
+        }
+        if self.enable_deny:
+            self.action_names[6] = 'deny'
+
         # For delayed rewards - track pending requests and their actions
         self.pending_rewards = []  # List of rewards to be delivered
         self.request_to_action = {}  # Map request ID to the action that created it
         self.next_request_id = 0
 
         # Initialize event queue
-        heappush(self.event_queue, (0, time.time_ns(), {"type": "timestamp"}))
+        heappush(self.event_queue, (0, random.random(), {"type": "timestamp"}))
 
         # Advance simulation to first decision point
         self._advance_to_decision_point()
@@ -133,6 +152,9 @@ class LLMDataCenterEnv(gym.Env):
     def step(self, action: int) -> Tuple[Dict, float, bool, bool, Dict]:
         """Execute one step in the environment."""
         self.episode_length += 1
+
+        # Track action taken
+        self.action_counts[action] += 1
 
         # Store current request ID
         current_request_id = self.next_request_id
@@ -239,7 +261,7 @@ class LLMDataCenterEnv(gym.Env):
                 self._handle_failed_request(cur_time)
 
                 # Schedule next timestamp
-                heappush(self.event_queue, (cur_time + self.time_interval, time.time_ns(), cur_event))
+                heappush(self.event_queue, (cur_time + self.time_interval, random.random(), cur_event))
 
                 # Check if new request arrives
                 if generate_bernoulli(self.bernoulli_prob):
@@ -282,7 +304,7 @@ class LLMDataCenterEnv(gym.Env):
             # No initial latency for immediately processed requests
             new_request["processing_start_time"] = cur_time
 
-            heappush(self.event_queue, (finish_time, time.time_ns(), {"type": "finish", "request": new_request}))
+            heappush(self.event_queue, (finish_time, random.random(), {"type": "finish", "request": new_request}))
         else:
             heappush(self.waiting_queue, (cur_time, {"type": "waiting", "request": new_request}))
 
@@ -410,6 +432,9 @@ class LLMDataCenterEnv(gym.Env):
         # Calculate profit
         info['profit'] = self.success_request_num / 1000 * 0.02
 
+        # Add action statistics
+        info['action_counts'] = self.action_counts.copy()
+
         return info
 
     def render(self):
@@ -450,17 +475,40 @@ class LLMDataCenterEnv(gym.Env):
             "Total Profit": self.success_request_num / 1000 * 0.02,
         }
 
+        # Add action statistics
+        summary["Action Statistics"] = {}
+        total_actions = sum(self.action_counts.values())
+        for action, count in self.action_counts.items():
+            action_name = self.action_names.get(action, f"action_{action}")
+            percentage = (count / total_actions * 100) if total_actions > 0 else 0
+            summary["Action Statistics"][action_name] = {
+                "count": count,
+                "percentage": percentage
+            }
+
         return summary
 
     def print_summary(self):
         """Print summary statistics."""
         print("\nSummary:")
         summary = self.get_final_summary()
+
+        # Print basic statistics
         for key, value in summary.items():
-            if isinstance(value, float):
-                print(f"{key}: {value:.3f}")
-            else:
-                print(f"{key}: {value}")
+            if key != "Action Statistics":
+                if isinstance(value, float):
+                    print(f"{key}: {value:.3f}")
+                else:
+                    print(f"{key}: {value}")
+
+        # Print action statistics
+        print("\nAction Statistics:")
+        print(f"{'Action':<15} {'Count':<10} {'Percentage':<10}")
+        print("-" * 35)
+
+        action_stats = summary["Action Statistics"]
+        for action_name, stats in action_stats.items():
+            print(f"{action_name:<15} {stats['count']:<10} {stats['percentage']:<10.1f}%")
 
     def close(self):
         """Clean up resources."""
