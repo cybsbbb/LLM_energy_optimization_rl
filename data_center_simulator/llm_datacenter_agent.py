@@ -172,7 +172,7 @@ class LLMDataCenterAgent:
                 policy_kwargs=self.policy_kwargs,
                 verbose=1,
                 device=self.device,
-                tensorboard_log="./datacenter_tensorboard/"
+                tensorboard_log="../result/datacenter_tensorboard/"
             )
         elif self.algorithm == "DQN":
             self.model = DQN(
@@ -193,7 +193,7 @@ class LLMDataCenterAgent:
                 policy_kwargs=self.policy_kwargs,
                 verbose=1,
                 device=self.device,
-                tensorboard_log="./datacenter_tensorboard/"
+                tensorboard_log="../result/datacenter_tensorboard/"
             )
         elif self.algorithm == "SAC":
             # SAC needs continuous actions, wrap environment
@@ -213,7 +213,7 @@ class LLMDataCenterAgent:
                 policy_kwargs=self.policy_kwargs,
                 verbose=1,
                 device=self.device,
-                tensorboard_log="./datacenter_tensorboard/"
+                tensorboard_log="../result/datacenter_tensorboard/"
             )
         elif self.algorithm == "TD3":
             # TD3 needs continuous actions, wrap environment
@@ -237,7 +237,7 @@ class LLMDataCenterAgent:
                 policy_kwargs=self.policy_kwargs,
                 verbose=1,
                 device=self.device,
-                tensorboard_log="./datacenter_tensorboard/"
+                tensorboard_log="../result/datacenter_tensorboard/"
             )
         else:
             raise ValueError(f"Unknown algorithm: {self.algorithm}")

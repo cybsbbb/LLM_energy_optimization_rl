@@ -18,7 +18,7 @@ class LLMDataCenterEnv(gym.Env):
 
     def __init__(self,
                  total_time: int = 24 * 3600 * 1000,  # 24 hours in milliseconds
-                 time_interval: int = 10,  # 10ms
+                 time_interval: int = 100,  # 10ms
                  bernoulli_prob: float = 0.2,
                  server_num: int = 200,
                  max_wait_time: int = 10000,  # 10 seconds, customer will leave after 10s wait
@@ -152,6 +152,14 @@ class LLMDataCenterEnv(gym.Env):
     def step(self, action: int) -> Tuple[Dict, float, bool, bool, Dict]:
         """Execute one step in the environment."""
         self.episode_length += 1
+
+        # Ensure action is an integer (some RL algorithms return numpy arrays)
+        if isinstance(action, np.ndarray):
+            action = int(action.item())
+        elif isinstance(action, tuple):
+            action = int(action[0].item())
+        else:
+            action = int(action)
 
         # Track action taken
         self.action_counts[action] += 1

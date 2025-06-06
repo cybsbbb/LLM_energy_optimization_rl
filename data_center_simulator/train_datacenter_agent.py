@@ -38,6 +38,14 @@ def evaluate_agent(agent, env_kwargs: Dict = None, n_episodes: int = 5, render: 
                 # For RL agents from stable-baselines3
                 action, _ = agent.predict(obs, deterministic=True)
 
+            # Ensure action is an integer
+            if isinstance(action, np.ndarray):
+                action = int(action.item())
+            elif isinstance(action, tuple):
+                action = int(action[0].item())
+            else:
+                action = int(action)
+
             # Take step
             obs, reward, terminated, truncated, info = env.step(action)
             episode_reward += reward
@@ -396,7 +404,7 @@ def main():
     parser.add_argument('--train', action='store_true', help='Train the RL agent(s)')
     parser.add_argument('--evaluate', action='store_true', help='Evaluate agents')
     parser.add_argument('--load-model', type=str, help='Path to load pretrained model')
-    parser.add_argument('--algorithms', nargs='+', default=['PPO'],
+    parser.add_argument('--algorithms', nargs='+', default=['DQN'],
                         choices=['PPO', 'A2C', 'DQN', 'SAC', 'TD3'],
                         help='RL algorithms to train/evaluate')
 
@@ -436,10 +444,10 @@ def main():
     parser.add_argument('--exploration-final-eps', type=float, default=0.05, help='Final exploration')
 
     # Environment arguments
-    parser.add_argument('--episode-time', type=int, default=3600, help='Episode time in seconds for training')
+    parser.add_argument('--episode-time', type=int, default=86400, help='Episode time in seconds for training')
     parser.add_argument('--eval-time', type=int, default=86400, help='Evaluation time in seconds (default: 24 hours)')
-    parser.add_argument('--server-num', type=int, default=200, help='Number of servers')
-    parser.add_argument('--bernoulli-prob', type=float, default=0.2, help='Request arrival probability')
+    parser.add_argument('--server-num', type=int, default=100, help='Number of servers')
+    parser.add_argument('--bernoulli-prob', type=float, default=0.8, help='Request arrival probability')
     parser.add_argument('--max-wait-time', type=int, default=10, help='Max wait time in seconds')
 
     # Evaluation arguments
@@ -453,6 +461,11 @@ def main():
     parser.add_argument('--baselines', nargs='+',
                         default=['all_fullkv', 'all_snapkv_64', 'rule_based_price', 'rule_based_deny', 'random'],
                         help='Baseline agents to evaluate')
+
+    # Used for debug
+    # parser.add_argument('--baselines', nargs='+',
+    #                     default=[],
+    #                     help='Baseline agents to evaluate')
 
     args = parser.parse_args()
 
