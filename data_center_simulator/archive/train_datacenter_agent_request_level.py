@@ -194,7 +194,7 @@ def compare_agents(agents: Dict, env_kwargs: Dict = None, n_episodes: int = 5):
     return results
 
 
-def plot_comparison(results: Dict, save_path: str = "../result/comparison_plot.png"):
+def plot_comparison(results: Dict, save_path: str = "comparison_plot.png"):
     """Plot comparison of agents across key metrics."""
     metrics = ['Success Rate', 'Average Score', 'Average Latency (s)',
                'Total Energy Cost', 'episode_reward']
@@ -327,11 +327,9 @@ def train_rl_agents(args):
         # Create environment with shorter episode for faster training
         env = agent.create_env(
             total_time=args.episode_time * 1000,  # Convert to milliseconds
-            time_interval=args.time_interval,
             server_num=args.server_num,
             bernoulli_prob=args.bernoulli_prob,
             max_wait_time=args.max_wait_time * 1000,  # Convert to milliseconds
-            step_time_ms=args.step_time * 1000,  # Convert to milliseconds
             enable_deny=args.enable_deny
         )
 
@@ -345,8 +343,8 @@ def train_rl_agents(args):
             eval_freq=args.eval_freq,
             n_eval_episodes=args.n_eval_episodes,
             save_freq=args.save_freq,
-            save_path=str(os.path.join(args.save_path, algorithm)),
-            log_path=str(os.path.join(args.log_path, algorithm))
+            save_path=os.path.join(args.save_path, algorithm),
+            log_path=os.path.join(args.log_path, algorithm)
         )
 
         # Save final model
@@ -355,7 +353,48 @@ def train_rl_agents(args):
         print(f"\n{algorithm} model saved to: {final_model_path}")
 
         agents[algorithm] = agent
+
     return agents
+
+    # Create agent
+    agent = LLMDataCenterAgent(
+        algorithm=args.algorithm,
+        learning_rate=args.learning_rate,
+        n_steps=args.n_steps,
+        batch_size=args.batch_size,
+        n_epochs=args.n_epochs,
+        gamma=args.gamma,
+        device=args.device
+    )
+
+    # Create environment with shorter episode for faster training
+    env = agent.create_env(
+        total_time=args.episode_time * 1000,  # Convert to milliseconds
+        server_num=args.server_num,
+        bernoulli_prob=args.bernoulli_prob,
+        max_wait_time=args.max_wait_time * 1000  # Convert to milliseconds
+    )
+
+    # Create model
+    agent.create_model()
+
+    # Train
+    print("Starting training...")
+    callback = agent.train(
+        total_timesteps=args.timesteps,
+        eval_freq=args.eval_freq,
+        n_eval_episodes=args.n_eval_episodes,
+        save_freq=args.save_freq,
+        save_path=args.save_path,
+        log_path=args.log_path
+    )
+
+    # Save final model
+    final_model_path = os.path.join(args.save_path, f"{args.algorithm}_final_{args.timesteps}.zip")
+    agent.save(final_model_path)
+    print(f"\nFinal model saved to: {final_model_path}")
+
+    return agent
 
 
 def main():
@@ -365,7 +404,7 @@ def main():
     parser.add_argument('--train', action='store_true', help='Train the RL agent(s)')
     parser.add_argument('--evaluate', action='store_true', help='Evaluate agents')
     parser.add_argument('--load-model', type=str, help='Path to load pretrained model')
-    parser.add_argument('--algorithms', nargs='+', default=['PPO'],
+    parser.add_argument('--algorithms', nargs='+', default=['DQN'],
                         choices=['PPO', 'A2C', 'DQN', 'SAC', 'TD3'],
                         help='RL algorithms to train/evaluate')
 
@@ -376,7 +415,7 @@ def main():
                         help='Disable deny action in environment')
 
     # General RL arguments
-    parser.add_argument('--timesteps', type=int, default=1000000, help='Total training timesteps')
+    parser.add_argument('--timesteps', type=int, default=10000, help='Total training timesteps')
     parser.add_argument('--learning-rate', type=float, default=3e-4, help='Learning rate')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
     parser.add_argument('--device', type=str, default='auto', help='Device to use (cpu/cuda/auto)')
@@ -408,23 +447,25 @@ def main():
     parser.add_argument('--episode-time', type=int, default=86400, help='Episode time in seconds for training')
     parser.add_argument('--eval-time', type=int, default=86400, help='Evaluation time in seconds (default: 24 hours)')
     parser.add_argument('--server-num', type=int, default=100, help='Number of servers')
-    parser.add_argument('--time-interval', type=int, default=100, help='Time interval in milliseconds')
-    parser.add_argument('--step-time', type=int, default=10, help='Time window per step in milliseconds (default 10 seconds)')
-    parser.add_argument('--bernoulli-prob', type=float, default=0.7, help='Request arrival probability')
+    parser.add_argument('--bernoulli-prob', type=float, default=0.8, help='Request arrival probability')
     parser.add_argument('--max-wait-time', type=int, default=10, help='Max wait time in seconds')
 
     # Evaluation arguments
-    parser.add_argument('--eval-freq', type=int, default=100000, help='Evaluation frequency during training')
+    parser.add_argument('--eval-freq', type=int, default=10000, help='Evaluation frequency during training')
     parser.add_argument('--n-eval-episodes', type=int, default=5, help='Number of evaluation episodes')
-    parser.add_argument('--save-freq', type=int, default=100000, help='Model save frequency')
+    parser.add_argument('--save-freq', type=int, default=10000, help='Model save frequency')
     parser.add_argument('--save-path', type=str, default='../result/datacenter_models/', help='Model save path')
     parser.add_argument('--log-path', type=str, default='../result/datacenter_logs/', help='Log path')
 
     # Baseline agents to include
     parser.add_argument('--baselines', nargs='+',
-                        # default=['all_fullkv', 'all_snapkv_64', 'rule_based_price', 'rule_based_deny', 'random'],
-                        default=['all_fullkv', 'all_snapkv_64', 'rule_based_price', 'random'],
+                        default=['all_fullkv', 'all_snapkv_64', 'rule_based_price', 'rule_based_deny', 'random'],
                         help='Baseline agents to evaluate')
+
+    # Used for debug
+    # parser.add_argument('--baselines', nargs='+',
+    #                     default=[],
+    #                     help='Baseline agents to evaluate')
 
     args = parser.parse_args()
 
@@ -482,11 +523,9 @@ def main():
         # Environment settings for evaluation (full 24-hour simulation)
         eval_env_kwargs = {
             'total_time': args.eval_time * 1000,
-            'time_interval': args.time_interval,
             'server_num': args.server_num,
             'bernoulli_prob': args.bernoulli_prob,
             'max_wait_time': args.max_wait_time * 1000,
-            'step_time_ms': args.step_time * 1000,
             'enable_deny': args.enable_deny
         }
 
@@ -494,7 +533,7 @@ def main():
         results = compare_agents(agents, eval_env_kwargs, n_episodes=args.n_eval_episodes)
 
         # Plot comparison
-        plot_comparison(results, save_path=f"../result/comparison_{timestamp}_{timestamp}.png")
+        plot_comparison(results, save_path=f"comparison_{timestamp}.png")
 
     # If neither train nor evaluate, just compare baseline agents
     if not args.train and not args.evaluate:
@@ -509,16 +548,14 @@ def main():
 
         eval_env_kwargs = {
             'total_time': args.eval_time * 1000,
-            'time_interval': args.time_interval,
             'server_num': args.server_num,
             'bernoulli_prob': args.bernoulli_prob,
             'max_wait_time': args.max_wait_time * 1000,
-            'step_time_ms': args.step_time * 1000,
             'enable_deny': args.enable_deny
         }
 
         results = compare_agents(agents, eval_env_kwargs, n_episodes=3)
-        plot_comparison(results, save_path=f"../result/comparison_{timestamp}_{timestamp}.png")
+        plot_comparison(results)
 
 
 if __name__ == "__main__":

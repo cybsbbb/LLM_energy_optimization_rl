@@ -1,6 +1,7 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+from datetime import datetime
 import torch
 import torch.nn as nn
 from stable_baselines3 import PPO, A2C, DQN, SAC, TD3
@@ -54,7 +55,7 @@ class DataCenterCallback(BaseCallback):
             info = self.locals.get("infos")[0]
 
             # Calculate rates
-            total_requests = info['success_requests'] + info['failed_requests'] + info['denied_requests']
+            total_requests = info['success_requests'] + info['failed_requests'] + info['denied_requests'] + info['timeout_requests']
             success_rate = info['success_requests'] / total_requests if total_requests > 0 else 0
             denial_rate = info['denied_requests'] / total_requests if total_requests > 0 else 0
 
@@ -329,7 +330,8 @@ class LLMDataCenterAgent:
         axes[1, 2].axis('off')
 
         plt.tight_layout()
-        plt.savefig('training_curves.png')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        plt.savefig(f'../result/training_curves_{timestamp}.png')
         plt.show()
 
     def save(self, path: str):
