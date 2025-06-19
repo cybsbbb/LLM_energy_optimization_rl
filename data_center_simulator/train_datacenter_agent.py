@@ -4,13 +4,8 @@ Handles training of different RL algorithms for KV-cache optimization.
 """
 
 import os
-import sys
 import argparse
-import numpy as np
 from datetime import datetime
-from typing import Dict, List
-import matplotlib.pyplot as plt
-
 from llm_datacenter_env import LLMDataCenterEnv
 from llm_datacenter_agent import LLMDataCenterAgent
 
@@ -18,10 +13,6 @@ from llm_datacenter_agent import LLMDataCenterAgent
 def train_rl_agents(args):
     """Train multiple RL agents for comparison."""
     agents = {}
-
-    # Create base directories
-    os.makedirs(args.save_path, exist_ok=True)
-    os.makedirs(args.log_path, exist_ok=True)
 
     for algorithm in args.algorithms:
         print("\n" + "=" * 80)
@@ -97,16 +88,12 @@ def train_rl_agents(args):
             eval_freq=args.eval_freq,
             n_eval_episodes=args.n_eval_episodes,
             save_freq=args.save_freq,
-            save_path=os.path.join(args.save_path, algorithm),
-            log_path=os.path.join(args.log_path, algorithm)
+            save_path=str(os.path.join(args.save_path, algorithm)),
+            log_path=str(os.path.join(args.log_path, algorithm))
         )
 
         # Save final model with detailed naming
-        final_model_path = os.path.join(
-            args.save_path,
-            algorithm,
-            f"{algorithm}_final_{args.timesteps}_{args.episode_time}s_{args.server_num}servers.zip"
-        )
+        final_model_path = os.path.join(args.save_path, algorithm, f"{algorithm}_final_{args.timesteps}.zip")
         agent.save(final_model_path)
         print(f"\n{algorithm} model saved to: {final_model_path}")
 
@@ -197,7 +184,7 @@ def quick_evaluation(agent, algorithm_name, args):
 
     # Create evaluation environment (shorter for quick check)
     eval_env = LLMDataCenterEnv(
-        total_time=86400 * 1000,  # 1 hour
+        total_time=24 * 3600 * 1000,  # 1 hour
         server_num=args.server_num,
         bernoulli_prob=args.bernoulli_prob,
         enable_deny=args.enable_deny
@@ -214,10 +201,10 @@ def main():
     parser = argparse.ArgumentParser(description='Train RL agent for LLM Data Center optimization')
 
     # Core training arguments
-    parser.add_argument('--algorithms', nargs='+', default=['PPO', 'A2C'],
+    parser.add_argument('--algorithms', nargs='+', default=['PPO', 'A2C', 'DQN', 'SAC'],
                         choices=['PPO', 'A2C', 'DQN', 'SAC', 'TD3'],
                         help='RL algorithms to train')
-    parser.add_argument('--timesteps', type=int, default=10000,
+    parser.add_argument('--timesteps', type=int, default=1000000,
                         help='Total training timesteps')
     parser.add_argument('--quick-eval', action='store_true',
                         help='Run quick evaluation after training')
@@ -225,11 +212,11 @@ def main():
     # Environment arguments
     parser.add_argument('--enable-deny', action='store_true', default=False,
                         help='Enable deny action in environment')
-    parser.add_argument('--episode-time', type=int, default=86400,  # 4 hours default for training
+    parser.add_argument('--episode-time', type=int, default=24 * 3600,  # 24 hours default for training
                         help='Episode time in seconds for training (default: 4 hours)')
     parser.add_argument('--server-num', type=int, default=200,
                         help='Number of servers')
-    parser.add_argument('--bernoulli-prob', type=float, default=0.12,
+    parser.add_argument('--bernoulli-prob', type=float, default=0.15,
                         help='Request arrival probability')
     parser.add_argument('--time-interval', type=int, default=10,
                         help='Time interval in milliseconds')
@@ -313,6 +300,10 @@ def main():
 
     args.save_path = os.path.join(args.save_path, experiment_dir)
     args.log_path = os.path.join(args.log_path, experiment_dir)
+
+    # Create base directories
+    os.makedirs(args.save_path, exist_ok=True)
+    os.makedirs(args.log_path, exist_ok=True)
 
     print("=" * 80)
     print("LLM DATA CENTER RL AGENT TRAINING")

@@ -23,7 +23,7 @@ class LLMDataCenterEnv(gym.Env):
     def __init__(self,
                  total_time: int = 24 * 3600 * 1000,  # 24 hours in milliseconds
                  time_interval: int = 10,  # Time interval in milliseconds
-                 bernoulli_prob: float = 0.2,
+                 bernoulli_prob: float = 0.15,
                  server_num: int = 200,
                  max_wait_time: int = 10000,  # 10 seconds
                  pue: float = 1.3,
