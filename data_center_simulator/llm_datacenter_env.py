@@ -31,14 +31,13 @@ class LLMDataCenterEnv(gym.Env):
                  # Step configuration
                  step_time_ms: int = 10000,  # Time window per step in milliseconds (default 10 seconds)
                  # Reward values
-                 success_reward: float = 0.0, # 1.0
-                 deny_penalty: float = -0.0, # -0.5
-                 timeout_penalty: float = -0.0, # -1.0
+                 success_reward: float = 0.5,
+                 deny_penalty: float = -0.0,
+                 timeout_penalty: float = -0.0,
                  # Reward weights
-                 score_weight: float = 2.0, # 2.0
-                 latency_penalty_weight: float = 0.0, # 0.5
-                 energy_penalty_weight: float = 1.0, # 0.3
-
+                 score_weight: float = 2.0,
+                 latency_penalty_weight: float = 0.0,
+                 energy_penalty_weight: float = 1.0,
                  render_mode: Optional[str] = None,
                  seed: Optional[int] = None):
 
@@ -99,6 +98,25 @@ class LLMDataCenterEnv(gym.Env):
         if seed is not None:
             self.reset(seed=seed)
 
+    def _calculate_completion_reward(self, request: Dict, latency: float) -> float:
+        """Calculate reward for a completed request based on actual outcomes."""
+        # Base success reward
+        reward = self.success_reward
+
+        # Quality bonus (actual score)
+        reward += request["score"] * self.score_weight
+
+        # Latency penalty (actual latency)
+        normalized_latency = min(latency / self.max_wait_time, 1.0)
+        reward -= normalized_latency * self.latency_penalty_weight
+
+        # Energy cost penalty (actual cost)
+        energy_cost = request["energy"] * request["energy_price"] * self.pue / self.j2mwh
+        normalized_energy = min(energy_cost / 0.0002, 1.0)
+        reward -= normalized_energy * self.energy_penalty_weight
+
+        return reward
+
     def reset(self, seed: Optional[int] = None, options: Optional[Dict] = None) -> Tuple[Dict, Dict]:
         """Reset the environment to initial state."""
         super().reset(seed=seed)
@@ -151,8 +169,10 @@ class LLMDataCenterEnv(gym.Env):
         # Step tracking
         self.step_start_time = 0
         self.requests_in_current_step = 0
-        self.current_step_rewards = []
         self.current_action = None
+
+        # For completion-based rewards
+        self.completed_requests_rewards = []  # Rewards from requests completed in this step
 
         # Initialize event queue
         heappush(self.event_queue, (0, random.random(), {"type": "timestamp"}))
@@ -183,7 +203,7 @@ class LLMDataCenterEnv(gym.Env):
         self.step_start_time = self.current_time
         step_end_time = min(self.step_start_time + self.step_time_ms, self.total_time)
         self.requests_in_current_step = 0
-        self.current_step_rewards = []
+        self.completed_requests_rewards = []
 
         # Process all events within this time window
         while self.current_time < step_end_time:
@@ -198,8 +218,9 @@ class LLMDataCenterEnv(gym.Env):
                 self._pending_request = False
 
         # Calculate aggregate reward for this step
-        if self.current_step_rewards:
-            step_reward = sum(self.current_step_rewards) / len(self.current_step_rewards)
+        # Always use completion-based rewards (from requests that finished in this step)
+        if self.completed_requests_rewards:
+            step_reward = sum(self.completed_requests_rewards) / len(self.completed_requests_rewards)
         else:
             step_reward = 0.0
 
@@ -214,7 +235,7 @@ class LLMDataCenterEnv(gym.Env):
         info = self._get_info()
         info['requests_processed'] = self.requests_in_current_step
         info['step_duration_ms'] = self.current_time - self.step_start_time
-        info['step_rewards'] = self.current_step_rewards.copy()
+        info['step_rewards'] = self.completed_requests_rewards.copy()
 
         return observation, step_reward, terminated, truncated, info
 
@@ -266,35 +287,29 @@ class LLMDataCenterEnv(gym.Env):
         if action_type == 'deny':
             # Deny the request
             self.denied_request_num += 1
-            reward = self.deny_penalty
-            self.current_step_rewards.append(reward)
+            # Denials get immediate feedback since there's no completion
+            self.completed_requests_rewards.append(self.deny_penalty)
         else:
             # Try to process the request
             new_request = self.gov_report_sim_dataset.get_random_item(action_type)
             new_request["energy_price"] = self._get_cur_energy_price(self.current_time)
             new_request["arrival_time"] = self.current_time
+            new_request["action"] = action  # Store the action that created this request
 
             # Try to add to processing or queue
             if self.processing_server_num < self.server_num:
                 # Can process immediately
                 self._start_processing(new_request)
-                # Calculate immediate reward based on expected outcomes
-                # FLAG: IMME
-                reward = self._calculate_immediate_reward(new_request, latency=0)
-                self.current_step_rewards.append(reward)
-            elif len(self.waiting_queue) < self.server_num * 2:
+                # No reward yet - will get it on completion
+            elif len(self.waiting_queue) < self.server_num * 5:
                 # Add to queue
                 heappush(self.waiting_queue, (self.current_time, new_request))
-                # Calculate reward with expected latency
-                # FLAG: IMME
-                expected_latency = self._estimate_queue_latency()
-                reward = self._calculate_immediate_reward(new_request, latency=expected_latency)
-                self.current_step_rewards.append(reward)
+                # No reward yet - will get it on completion or timeout
             else:
-                # System overloaded, request failed
+                # System overloaded, request failed immediately
                 self.failed_request_num += 1
-                reward = self.timeout_penalty
-                self.current_step_rewards.append(reward)
+                # Immediate failure gets immediate feedback
+                self.completed_requests_rewards.append(self.timeout_penalty)
 
     def _start_processing(self, request: Dict):
         """Start processing a request."""
@@ -306,15 +321,13 @@ class LLMDataCenterEnv(gym.Env):
 
     def _handle_timeouts(self, cur_time: int):
         """Remove requests that waited too long."""
-        timed_out = 0
         while len(self.waiting_queue) > 0 and self.waiting_queue[0][0] < cur_time - self.max_wait_time:
-            self.waiting_queue.pop(0)
+            arrival_time, request = self.waiting_queue.pop(0)
             self.timeout_request_num += 1
-            timed_out += 1
 
-        # Add timeout penalties to current step if any
-        if timed_out > 0 and self.current_step_rewards is not None:
-            self.current_step_rewards.extend([self.timeout_penalty] * timed_out)
+            # Timeout penalty
+            if hasattr(self, 'completed_requests_rewards'):
+                self.completed_requests_rewards.append(self.timeout_penalty)
 
     def _handle_finish(self, cur_time: int, cur_event: Dict):
         """Handle request completion."""
@@ -323,6 +336,12 @@ class LLMDataCenterEnv(gym.Env):
 
         request = cur_event["request"]
 
+        # Calculate actual latency if the request waited
+        if "arrival_time" in request:
+            actual_latency = request.get("processing_start_time", cur_time) - request["arrival_time"]
+        else:
+            actual_latency = 0
+
         # Update metrics
         score = request["score"]
         self.total_score += score
@@ -330,11 +349,16 @@ class LLMDataCenterEnv(gym.Env):
 
         # Update recent scores
         self.recent_scores.append(score)
-        if len(self.recent_scores) > 10:
+        if len(self.recent_scores) > 100:
             self.recent_scores.pop(0)
 
         self.tot_energy += request["energy"]
         self.tot_energy_cost += request["energy"] * request["energy_price"]
+
+        # Calculate completion reward based on actual outcomes
+        if hasattr(self, 'completed_requests_rewards'):
+            reward = self._calculate_completion_reward(request, actual_latency)
+            self.completed_requests_rewards.append(reward)
 
         # Process next waiting request if any
         if len(self.waiting_queue) > 0:
@@ -347,45 +371,12 @@ class LLMDataCenterEnv(gym.Env):
 
             # Update recent latencies
             self.recent_latencies.append(latency)
-            if len(self.recent_latencies) > 10:
+            if len(self.recent_latencies) > 100:
                 self.recent_latencies.pop(0)
 
             # Start processing
+            waiting_request["processing_start_time"] = cur_time
             self._start_processing(waiting_request)
-
-    def _calculate_immediate_reward(self, request: Dict, latency: float) -> float:
-        """Calculate reward for a request based on its properties and expected latency."""
-        # Base success reward
-        reward = self.success_reward
-
-        # Quality bonus
-        reward += request["score"] * self.score_weight
-
-        # Latency penalty (normalized)
-        normalized_latency = min(latency / self.max_wait_time, 1.0)
-        reward -= normalized_latency * self.latency_penalty_weight
-
-        # Energy cost penalty
-        energy_cost = request["energy"] * request["energy_price"] * self.pue / self.j2mwh
-        normalized_energy = min(energy_cost / 0.0002, 1.0)  # Normalize to typical range
-        reward -= normalized_energy * self.energy_penalty_weight
-
-        return reward
-
-    def _estimate_queue_latency(self) -> float:
-        """Estimate latency for a new request entering the queue."""
-        if not self.waiting_queue:
-            # Estimate based on current processing
-            avg_processing_time = 12000  # 12 seconds as estimate
-            # return (self.processing_server_num / self.server_num) * avg_processing_time
-            return 0
-        else:
-            # Use recent latencies if available
-            if self.recent_latencies:
-                return sum(self.recent_latencies) / len(self.recent_latencies)
-            else:
-                # Rough estimate based on queue length
-                return len(self.waiting_queue) * 100  # 1 second per queued request
 
     def _get_cur_energy_price(self, cur_time: int) -> float:
         """Get current energy price."""
@@ -471,23 +462,18 @@ class LLMDataCenterEnv(gym.Env):
         """Get final summary statistics."""
         total_requests = self.success_request_num + self.failed_request_num + self.denied_request_num + self.timeout_request_num
 
-        summary = {
-            "Total Success Requests": self.success_request_num,
-            "Total Failed Requests": self.failed_request_num,
-            "Total Denied Requests": self.denied_request_num,
-            "Total Timeout Requests": self.timeout_request_num,
-            "Success Rate": self.success_request_num / total_requests if total_requests > 0 else 0,
-            "Denial Rate": self.denied_request_num / total_requests if total_requests > 0 else 0,
-            "Timeout Rate": self.timeout_request_num / total_requests if total_requests > 0 else 0,
-            "Average Latency (s)": (self.total_latency / self.latency_count) / 1000 if self.latency_count > 0 else 0,
-            "Average Score": (self.total_score / self.score_count) * 100 if self.score_count > 0 else 0,
-            "Total Energy (J)": self.tot_energy,
-            "Total Energy Cost": self.tot_energy_cost * self.pue / self.j2mwh,
-            "Total Profit": self.success_request_num / 1000 * 0.02,
-        }
+        summary = {"Total Success Requests": self.success_request_num, "Total Failed Requests": self.failed_request_num,
+                   "Total Denied Requests": self.denied_request_num, "Total Timeout Requests": self.timeout_request_num,
+                   "Success Rate": self.success_request_num / total_requests if total_requests > 0 else 0,
+                   "Denial Rate": self.denied_request_num / total_requests if total_requests > 0 else 0,
+                   "Timeout Rate": self.timeout_request_num / total_requests if total_requests > 0 else 0,
+                   "Average Latency (s)": (self.total_latency / self.latency_count) / 1000 if self.latency_count > 0 else 0,
+                   "Average Score": (self.total_score / self.score_count) * 100 if self.score_count > 0 else 0,
+                   "Total Energy (J)": self.tot_energy,
+                   "Total Energy Cost": self.tot_energy_cost * self.pue / self.j2mwh,
+                   "Total Profit": self.success_request_num / 1000 * 0.02, "Action Statistics": {}}
 
         # Add action statistics
-        summary["Action Statistics"] = {}
         total_actions = sum(self.action_counts.values())
         for action, count in self.action_counts.items():
             action_name = self.action_names.get(action, f"action_{action}")

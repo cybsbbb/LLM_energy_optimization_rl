@@ -1,8 +1,8 @@
-import argparse
 import os
 import sys
-from datetime import datetime
+import argparse
 import numpy as np
+from datetime import datetime
 from typing import Dict, List
 import matplotlib.pyplot as plt
 
@@ -370,13 +370,13 @@ def main():
                         help='RL algorithms to train/evaluate')
 
     # Environment arguments
-    parser.add_argument('--enable-deny', action='store_true', default=True,
+    parser.add_argument('--enable-deny', action='store_true', default=False,
                         help='Enable deny action in environment')
     parser.add_argument('--disable-deny', dest='enable_deny', action='store_false',
                         help='Disable deny action in environment')
 
     # General RL arguments
-    parser.add_argument('--timesteps', type=int, default=1000000, help='Total training timesteps')
+    parser.add_argument('--timesteps', type=int, default=200000, help='Total training timesteps')
     parser.add_argument('--learning-rate', type=float, default=3e-4, help='Learning rate')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
     parser.add_argument('--device', type=str, default='auto', help='Device to use (cpu/cuda/auto)')
@@ -407,16 +407,16 @@ def main():
     # Environment arguments
     parser.add_argument('--episode-time', type=int, default=86400, help='Episode time in seconds for training')
     parser.add_argument('--eval-time', type=int, default=86400, help='Evaluation time in seconds (default: 24 hours)')
-    parser.add_argument('--server-num', type=int, default=100, help='Number of servers')
-    parser.add_argument('--time-interval', type=int, default=100, help='Time interval in milliseconds')
-    parser.add_argument('--step-time', type=int, default=10, help='Time window per step in milliseconds (default 10 seconds)')
-    parser.add_argument('--bernoulli-prob', type=float, default=0.7, help='Request arrival probability')
+    parser.add_argument('--server-num', type=int, default=200, help='Number of servers')
+    parser.add_argument('--bernoulli-prob', type=float, default=0.12, help='Request arrival probability')
+    parser.add_argument('--time-interval', type=int, default=10, help='Time interval in milliseconds')
     parser.add_argument('--max-wait-time', type=int, default=10, help='Max wait time in seconds')
+    parser.add_argument('--step-time', type=int, default=10, help='Time window per step in milliseconds (default 10 seconds)')
 
     # Evaluation arguments
-    parser.add_argument('--eval-freq', type=int, default=100000, help='Evaluation frequency during training')
+    parser.add_argument('--eval-freq', type=int, default=10000, help='Evaluation frequency during training')
     parser.add_argument('--n-eval-episodes', type=int, default=5, help='Number of evaluation episodes')
-    parser.add_argument('--save-freq', type=int, default=100000, help='Model save frequency')
+    parser.add_argument('--save-freq', type=int, default=10000, help='Model save frequency')
     parser.add_argument('--save-path', type=str, default='../result/datacenter_models/', help='Model save path')
     parser.add_argument('--log-path', type=str, default='../result/datacenter_logs/', help='Log path')
 
@@ -494,7 +494,7 @@ def main():
         results = compare_agents(agents, eval_env_kwargs, n_episodes=args.n_eval_episodes)
 
         # Plot comparison
-        plot_comparison(results, save_path=f"../result/comparison_{timestamp}_{timestamp}.png")
+        plot_comparison(results, save_path=f"../result/comparison_{timestamp}.png")
 
     # If neither train nor evaluate, just compare baseline agents
     if not args.train and not args.evaluate:
@@ -518,7 +518,7 @@ def main():
         }
 
         results = compare_agents(agents, eval_env_kwargs, n_episodes=3)
-        plot_comparison(results, save_path=f"../result/comparison_{timestamp}_{timestamp}.png")
+        plot_comparison(results, save_path=f"../result/comparison_{timestamp}.png")
 
 
 if __name__ == "__main__":
