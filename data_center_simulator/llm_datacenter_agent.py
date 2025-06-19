@@ -288,11 +288,11 @@ class LLMDataCenterAgent:
         )
 
         # Plot training curves
-        self.plot_training_curves(datacenter_callback)
+        self.plot_training_curves(datacenter_callback, save_path)
 
         return datacenter_callback
 
-    def plot_training_curves(self, callback: DataCenterCallback):
+    def plot_training_curves(self, callback: DataCenterCallback, save_path: str):
         """Plot training curves."""
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
 
@@ -330,9 +330,8 @@ class LLMDataCenterAgent:
         axes[1, 2].axis('off')
 
         plt.tight_layout()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        plt.savefig(f'../result/training_curves_{timestamp}.png')
-        plt.show()
+        plt.savefig(os.path.join(save_path, "training_curves.png"))
+        # plt.show()
 
     def save(self, path: str):
         """Save the model."""
