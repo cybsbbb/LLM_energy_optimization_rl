@@ -39,7 +39,9 @@ class LLMDataCenterEnv(gym.Env):
                  latency_penalty_weight: float = 0.0,
                  energy_penalty_weight: float = 1.0,
                  render_mode: Optional[str] = None,
-                 seed: Optional[int] = None):
+                 seed: Optional[int] = None,
+                 # Logging configuration
+                 enable_detailed_logging: bool = False):
 
         super().__init__()
 
@@ -53,6 +55,7 @@ class LLMDataCenterEnv(gym.Env):
         self.enable_deny = enable_deny
         self.render_mode = render_mode
         self.step_time_ms = step_time_ms  # Time window for each step
+        self.enable_detailed_logging = enable_detailed_logging
 
         # Reward parameters
         self.success_reward = success_reward
@@ -94,9 +97,41 @@ class LLMDataCenterEnv(gym.Env):
             'recent_score': spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
         })
 
+        # Enhanced logging for action tracking
+        self.step_log = []  # Store detailed step information
+        self.reset_logging()
+
         # Initialize state
         if seed is not None:
             self.reset(seed=seed)
+
+    def reset_logging(self):
+        """Reset logging data."""
+        self.step_log = []
+
+    def log_step_details(self, action: int, obs: Dict, reward: float, info: Dict):
+        """Log detailed step information for later analysis."""
+        if self.enable_detailed_logging:
+            step_info = {
+                'time_ms': self.current_time,
+                'time_hours': self.current_time / 1000 / 3600,
+                'action': action,
+                'action_name': self.action_to_kv_size[action],
+                'energy_price': self._get_cur_energy_price(self.current_time),
+                'processing_ratio': obs['processing_ratio'][0],
+                'waiting_ratio': obs['waiting_ratio'][0],
+                'recent_latency': obs['recent_latency'][0],
+                'recent_score': obs['recent_score'][0],
+                'reward': reward,
+                'success_requests': info.get('success_requests', 0),
+                'denied_requests': info.get('denied_requests', 0),
+                'cumulative_reward': info.get('episode_reward', 0),
+            }
+            self.step_log.append(step_info)
+
+    def get_step_log(self) -> List[Dict]:
+        """Get the complete step log for this episode."""
+        return self.step_log.copy()
 
     def _calculate_completion_reward(self, request: Dict, latency: float) -> float:
         """Calculate reward for a completed request based on actual outcomes."""
@@ -174,6 +209,9 @@ class LLMDataCenterEnv(gym.Env):
         # For completion-based rewards
         self.completed_requests_rewards = []  # Rewards from requests completed in this step
 
+        # Reset logging
+        self.reset_logging()
+
         # Initialize event queue
         heappush(self.event_queue, (0, random.random(), {"type": "timestamp"}))
 
@@ -236,6 +274,9 @@ class LLMDataCenterEnv(gym.Env):
         info['requests_processed'] = self.requests_in_current_step
         info['step_duration_ms'] = self.current_time - self.step_start_time
         info['step_rewards'] = self.completed_requests_rewards.copy()
+
+        # Log step details for analysis
+        self.log_step_details(action, observation, step_reward, info)
 
         return observation, step_reward, terminated, truncated, info
 
@@ -457,6 +498,8 @@ class LLMDataCenterEnv(gym.Env):
             if self.recent_scores:
                 print(f"Recent Score: {sum(self.recent_scores) / len(self.recent_scores):.3f}")
             print(f"Energy Price: ${self._get_cur_energy_price(self.current_time):.2f}")
+            if self.current_action is not None:
+                print(f"Current Action: {self.action_names[self.current_action]}")
 
     def get_final_summary(self) -> Dict:
         """Get final summary statistics."""

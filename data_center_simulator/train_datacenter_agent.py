@@ -1,3 +1,8 @@
+"""
+Training script for LLM Data Center RL agents.
+Handles training of different RL algorithms for KV-cache optimization.
+"""
+
 import os
 import sys
 import argparse
@@ -8,271 +13,15 @@ import matplotlib.pyplot as plt
 
 from llm_datacenter_env import LLMDataCenterEnv
 from llm_datacenter_agent import LLMDataCenterAgent
-from baseline_agents import (
-    get_baseline_agent, AllFullKVAgent, AllSnapKV64Agent,
-    RuleBasedPriceAgent, SmartDenyAgent, AdaptiveLoadAgent
-)
-
-
-def evaluate_agent(agent, env_kwargs: Dict = None, n_episodes: int = 5, render: bool = False):
-    """Evaluate any agent (baseline or RL) on the environment."""
-    if env_kwargs is None:
-        env_kwargs = {}
-
-    all_summaries = []
-    all_rewards = []
-
-    for episode in range(n_episodes):
-        # Create fresh environment for each episode
-        env = LLMDataCenterEnv(render_mode="human" if render else None, **env_kwargs)
-
-        obs, _ = env.reset()
-        done = False
-        episode_reward = 0
-
-        while not done:
-            # Get action from agent
-            if hasattr(agent, 'predict'):
-                action = agent.predict(obs, deterministic=True)
-            else:
-                # For RL agents from stable-baselines3
-                action, _ = agent.predict(obs, deterministic=True)
-
-            # Ensure action is an integer
-            if isinstance(action, np.ndarray):
-                action = int(action.item())
-            elif isinstance(action, tuple):
-                action = int(action[0].item())
-            else:
-                action = int(action)
-
-            # Take step
-            obs, reward, terminated, truncated, info = env.step(action)
-            episode_reward += reward
-            done = terminated or truncated
-
-            if render:
-                env.render()
-
-        # Get final summary
-        summary = env.get_final_summary()
-        summary['episode_reward'] = episode_reward
-        all_summaries.append(summary)
-        all_rewards.append(episode_reward)
-
-        env.close()
-
-    # Calculate average metrics
-    avg_summary = {}
-    for key in all_summaries[0].keys():
-        if key == "Action Statistics":
-            # Handle action statistics separately
-            avg_summary[key] = {}
-            # Get all action names from first episode
-            action_names = list(all_summaries[0][key].keys())
-            for action_name in action_names:
-                counts = [s[key][action_name]['count'] for s in all_summaries]
-                percentages = [s[key][action_name]['percentage'] for s in all_summaries]
-                avg_summary[key][action_name] = {
-                    'count': {'mean': np.mean(counts), 'std': np.std(counts)},
-                    'percentage': {'mean': np.mean(percentages), 'std': np.std(percentages)}
-                }
-        else:
-            values = [s[key] for s in all_summaries]
-            avg_summary[key] = {
-                'mean': np.mean(values),
-                'std': np.std(values)
-            }
-
-    return avg_summary, all_summaries
-
-
-def print_evaluation_results(agent_name: str, avg_summary: Dict):
-    """Print evaluation results for an agent."""
-    print(f"\n{'=' * 60}")
-    print(f"Agent: {agent_name}")
-    print(f"{'=' * 60}")
-
-    # Separate action statistics from other metrics
-    action_stats = None
-
-    for metric, stats in avg_summary.items():
-        if metric == "Action Statistics":
-            action_stats = stats
-        elif isinstance(stats, dict):
-            print(f"{metric}: {stats['mean']:.3f} ± {stats['std']:.3f}")
-        else:
-            print(f"{metric}: {stats:.3f}")
-
-    # Print action statistics if available
-    if action_stats:
-        print("\nAction Usage:")
-        print(f"{'Action':<15} {'Avg Count':<12} {'Percentage':<10}")
-        print("-" * 37)
-
-        # Calculate total actions for percentages
-        total_actions = sum(stats['count']['mean'] for action_name, stats in action_stats.items()
-                            if isinstance(stats, dict) and 'count' in stats)
-
-        for action_name, stats in action_stats.items():
-            if isinstance(stats, dict) and 'count' in stats:
-                avg_count = stats['count']['mean']
-                percentage = (avg_count / total_actions * 100) if total_actions > 0 else 0
-                print(f"{action_name:<15} {avg_count:<12.1f} {percentage:<10.1f}%")
-
-
-def compare_agents(agents: Dict, env_kwargs: Dict = None, n_episodes: int = 5):
-    """Compare multiple agents."""
-    print("\n" + "=" * 80)
-    print("COMPARING AGENTS")
-    print("=" * 80)
-
-    results = {}
-
-    for name, agent in agents.items():
-        print(f"\nEvaluating {name}...")
-        avg_summary, _ = evaluate_agent(agent, env_kwargs, n_episodes)
-        results[name] = avg_summary
-        print_evaluation_results(name, avg_summary)
-
-    # Print comparison table
-    print("\n" + "=" * 80)
-    print("FINAL COMPARISON - Performance Metrics")
-    print("=" * 80)
-
-    # Select key metrics for comparison
-    metrics = ['Success Rate', 'Denial Rate', 'Average Score', 'Average Latency (s)',
-               'Total Energy Cost', 'Total Profit', 'episode_reward']
-
-    # Print header
-    header = f"{'Agent':<25}"
-    for metric in metrics:
-        header += f"{metric:<18}"
-    print(header)
-    print("-" * len(header))
-
-    # Print data
-    for name, summary in results.items():
-        row = f"{name:<25}"
-        for metric in metrics:
-            if metric in summary:
-                value = summary[metric]['mean']
-                row += f"{value:<18.3f}"
-            else:
-                row += f"{'N/A':<18}"
-        print(row)
-
-    # Print action usage comparison
-    print("\n" + "=" * 80)
-    print("FINAL COMPARISON - Action Usage")
-    print("=" * 80)
-
-    # Get all action names from first agent
-    first_agent_name = list(results.keys())[0]
-    if "Action Statistics" in results[first_agent_name]:
-        action_names = list(results[first_agent_name]["Action Statistics"].keys())
-
-        # Print header
-        header = f"{'Agent':<25}"
-        for action in action_names:
-            header += f"{action:<15}"
-        print(header)
-        print("-" * len(header))
-
-        # Print data
-        for name, summary in results.items():
-            if "Action Statistics" in summary:
-                row = f"{name:<25}"
-                for action in action_names:
-                    if action in summary["Action Statistics"]:
-                        percentage = summary["Action Statistics"][action]['percentage']['mean']
-                        row += f"{percentage:<15.1f}%"
-                    else:
-                        row += f"{'0.0%':<15}"
-                print(row)
-
-    return results
-
-
-def plot_comparison(results: Dict, save_path: str = "../result/comparison_plot.png"):
-    """Plot comparison of agents across key metrics."""
-    metrics = ['Success Rate', 'Average Score', 'Average Latency (s)',
-               'Total Energy Cost', 'episode_reward']
-
-    n_agents = len(results)
-    n_metrics = len(metrics)
-
-    # Create figure with subplots for metrics and action distribution
-    fig = plt.figure(figsize=(20, 10))
-
-    # Metrics plots
-    for i, metric in enumerate(metrics):
-        ax = plt.subplot(2, n_metrics, i + 1)
-
-        agent_names = list(results.keys())
-        x = np.arange(n_agents)
-
-        values = []
-        errors = []
-
-        for agent in agent_names:
-            if metric in results[agent]:
-                values.append(results[agent][metric]['mean'])
-                errors.append(results[agent][metric]['std'])
-            else:
-                values.append(0)
-                errors.append(0)
-
-        ax.bar(x, values, yerr=errors, capsize=5)
-        ax.set_title(metric)
-        ax.set_xticks(x)
-        ax.set_xticklabels(agent_names, rotation=45, ha='right')
-        ax.grid(axis='y', alpha=0.3)
-
-    # Action distribution plot
-    ax = plt.subplot(2, 1, 2)
-
-    # Get action names from first agent
-    first_agent = list(results.keys())[0]
-    if "Action Statistics" in results[first_agent]:
-        action_names = list(results[first_agent]["Action Statistics"].keys())
-
-        # Prepare data for stacked bar chart
-        action_data = {}
-        for action in action_names:
-            action_data[action] = []
-            for agent in results.keys():
-                if "Action Statistics" in results[agent] and action in results[agent]["Action Statistics"]:
-                    action_data[action].append(results[agent]["Action Statistics"][action]['percentage']['mean'])
-                else:
-                    action_data[action].append(0)
-
-        # Create stacked bar chart
-        x = np.arange(len(results))
-        bottom = np.zeros(len(results))
-
-        colors = plt.cm.viridis(np.linspace(0, 1, len(action_names)))
-
-        for i, action in enumerate(action_names):
-            ax.bar(x, action_data[action], bottom=bottom, label=action, color=colors[i])
-            bottom += action_data[action]
-
-        ax.set_title('Action Distribution (%)')
-        ax.set_xlabel('Agent')
-        ax.set_ylabel('Percentage')
-        ax.set_xticks(x)
-        ax.set_xticklabels(list(results.keys()), rotation=45, ha='right')
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        ax.set_ylim(0, 100)
-
-    plt.tight_layout()
-    plt.savefig(save_path)
-    plt.show()
 
 
 def train_rl_agents(args):
     """Train multiple RL agents for comparison."""
     agents = {}
+
+    # Create base directories
+    os.makedirs(args.save_path, exist_ok=True)
+    os.makedirs(args.log_path, exist_ok=True)
 
     for algorithm in args.algorithms:
         print("\n" + "=" * 80)
@@ -281,6 +30,9 @@ def train_rl_agents(args):
         print(f"Total timesteps: {args.timesteps}")
         print(f"Learning rate: {args.learning_rate}")
         print(f"Enable deny: {args.enable_deny}")
+        print(f"Episode time: {args.episode_time} seconds")
+        print(f"Server count: {args.server_num}")
+        print(f"Request probability: {args.bernoulli_prob}")
         print("=" * 80 + "\n")
 
         # Create agent with algorithm-specific parameters
@@ -324,7 +76,7 @@ def train_rl_agents(args):
 
         agent = LLMDataCenterAgent(**agent_params)
 
-        # Create environment with shorter episode for faster training
+        # Create environment with specified parameters
         env = agent.create_env(
             total_time=args.episode_time * 1000,  # Convert to milliseconds
             time_interval=args.time_interval,
@@ -345,180 +97,255 @@ def train_rl_agents(args):
             eval_freq=args.eval_freq,
             n_eval_episodes=args.n_eval_episodes,
             save_freq=args.save_freq,
-            save_path=str(os.path.join(args.save_path, algorithm)),
-            log_path=str(os.path.join(args.log_path, algorithm))
+            save_path=os.path.join(args.save_path, algorithm),
+            log_path=os.path.join(args.log_path, algorithm)
         )
 
-        # Save final model
-        final_model_path = os.path.join(args.save_path, algorithm, f"{algorithm}_final_{args.timesteps}.zip")
+        # Save final model with detailed naming
+        final_model_path = os.path.join(
+            args.save_path,
+            algorithm,
+            f"{algorithm}_final_{args.timesteps}_{args.episode_time}s_{args.server_num}servers.zip"
+        )
         agent.save(final_model_path)
         print(f"\n{algorithm} model saved to: {final_model_path}")
 
+        # Save training configuration
+        config_path = os.path.join(args.save_path, algorithm, "training_config.txt")
+        save_training_config(args, algorithm, config_path)
+
         agents[algorithm] = agent
+
+    # Save overall training summary
+    summary_path = os.path.join(args.save_path, "training_summary.txt")
+    save_training_summary(args, list(agents.keys()), summary_path)
+
     return agents
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Train and evaluate RL agent for LLM Data Center optimization')
+def save_training_config(args, algorithm, config_path):
+    """Save training configuration to file."""
+    with open(config_path, 'w') as f:
+        f.write(f"Training Configuration for {algorithm}\n")
+        f.write("=" * 50 + "\n")
+        f.write(f"Algorithm: {algorithm}\n")
+        f.write(f"Total timesteps: {args.timesteps}\n")
+        f.write(f"Learning rate: {args.learning_rate}\n")
+        f.write(f"Gamma: {args.gamma}\n")
+        f.write(f"Device: {args.device}\n")
+        f.write(f"Enable deny: {args.enable_deny}\n\n")
 
-    # Actions
-    parser.add_argument('--train', action='store_true', help='Train the RL agent(s)')
-    parser.add_argument('--evaluate', action='store_true', help='Evaluate agents')
-    parser.add_argument('--load-model', type=str, help='Path to load pretrained model')
-    parser.add_argument('--algorithms', nargs='+', default=['PPO'],
+        f.write("Environment Configuration:\n")
+        f.write(f"Episode time: {args.episode_time} seconds\n")
+        f.write(f"Server count: {args.server_num}\n")
+        f.write(f"Bernoulli probability: {args.bernoulli_prob}\n")
+        f.write(f"Time interval: {args.time_interval} ms\n")
+        f.write(f"Max wait time: {args.max_wait_time} seconds\n")
+        f.write(f"Step time: {args.step_time} seconds\n\n")
+
+        f.write("Training Configuration:\n")
+        f.write(f"Evaluation frequency: {args.eval_freq}\n")
+        f.write(f"Evaluation episodes: {args.n_eval_episodes}\n")
+        f.write(f"Save frequency: {args.save_freq}\n")
+
+        if algorithm in ['PPO', 'A2C']:
+            f.write(f"N steps: {args.n_steps}\n")
+            f.write(f"Batch size: {args.batch_size}\n")
+            f.write(f"N epochs: {args.n_epochs}\n")
+            f.write(f"GAE lambda: {args.gae_lambda}\n")
+            f.write(f"Entropy coefficient: {args.ent_coef}\n")
+            f.write(f"Value function coefficient: {args.vf_coef}\n")
+            f.write(f"Max grad norm: {args.max_grad_norm}\n")
+            if algorithm == 'PPO':
+                f.write(f"Clip range: {args.clip_range}\n")
+
+        elif algorithm in ['DQN', 'SAC', 'TD3']:
+            f.write(f"Batch size: {args.batch_size}\n")
+            f.write(f"Buffer size: {args.buffer_size}\n")
+            f.write(f"Learning starts: {args.learning_starts}\n")
+            f.write(f"Tau: {args.tau}\n")
+            f.write(f"Train frequency: {args.train_freq}\n")
+            f.write(f"Gradient steps: {args.gradient_steps}\n")
+
+
+def save_training_summary(args, algorithms, summary_path):
+    """Save overall training summary."""
+    with open(summary_path, 'w') as f:
+        f.write("Training Session Summary\n")
+        f.write("=" * 50 + "\n")
+        f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Algorithms trained: {', '.join(algorithms)}\n")
+        f.write(f"Total timesteps per algorithm: {args.timesteps}\n")
+        f.write(f"Episode duration: {args.episode_time} seconds\n")
+        f.write(f"Environment servers: {args.server_num}\n")
+        f.write(f"Request probability: {args.bernoulli_prob}\n")
+        f.write(f"Deny action enabled: {args.enable_deny}\n\n")
+
+        f.write("Saved Models:\n")
+        for algorithm in algorithms:
+            model_path = os.path.join(
+                args.save_path,
+                algorithm,
+                f"{algorithm}_final_{args.timesteps}_{args.episode_time}s_{args.server_num}servers.zip"
+            )
+            f.write(f"  {algorithm}: {model_path}\n")
+
+
+def quick_evaluation(agent, algorithm_name, args):
+    """Run a quick evaluation after training."""
+    print(f"\nRunning quick evaluation for {algorithm_name}...")
+
+    # Create evaluation environment (shorter for quick check)
+    eval_env = LLMDataCenterEnv(
+        total_time=86400 * 1000,  # 1 hour
+        server_num=args.server_num,
+        bernoulli_prob=args.bernoulli_prob,
+        enable_deny=args.enable_deny
+    )
+
+    # Run evaluation
+    mean_reward, std_reward = agent.evaluate(n_eval_episodes=3, render=False)
+    print(f"{algorithm_name} - Mean reward: {mean_reward:.2f} +/- {std_reward:.2f}")
+
+    return mean_reward, std_reward
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Train RL agent for LLM Data Center optimization')
+
+    # Core training arguments
+    parser.add_argument('--algorithms', nargs='+', default=['PPO', 'A2C'],
                         choices=['PPO', 'A2C', 'DQN', 'SAC', 'TD3'],
-                        help='RL algorithms to train/evaluate')
+                        help='RL algorithms to train')
+    parser.add_argument('--timesteps', type=int, default=10000,
+                        help='Total training timesteps')
+    parser.add_argument('--quick-eval', action='store_true',
+                        help='Run quick evaluation after training')
 
     # Environment arguments
     parser.add_argument('--enable-deny', action='store_true', default=False,
                         help='Enable deny action in environment')
-    parser.add_argument('--disable-deny', dest='enable_deny', action='store_false',
-                        help='Disable deny action in environment')
+    parser.add_argument('--episode-time', type=int, default=86400,  # 4 hours default for training
+                        help='Episode time in seconds for training (default: 4 hours)')
+    parser.add_argument('--server-num', type=int, default=200,
+                        help='Number of servers')
+    parser.add_argument('--bernoulli-prob', type=float, default=0.12,
+                        help='Request arrival probability')
+    parser.add_argument('--time-interval', type=int, default=10,
+                        help='Time interval in milliseconds')
+    parser.add_argument('--max-wait-time', type=int, default=10,
+                        help='Max wait time in seconds')
+    parser.add_argument('--step-time', type=int, default=10,
+                        help='Time window per step in seconds')
 
     # General RL arguments
-    parser.add_argument('--timesteps', type=int, default=200000, help='Total training timesteps')
-    parser.add_argument('--learning-rate', type=float, default=3e-4, help='Learning rate')
-    parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
-    parser.add_argument('--device', type=str, default='auto', help='Device to use (cpu/cuda/auto)')
+    parser.add_argument('--learning-rate', type=float, default=3e-4,
+                        help='Learning rate')
+    parser.add_argument('--gamma', type=float, default=0.99,
+                        help='Discount factor')
+    parser.add_argument('--device', type=str, default='auto',
+                        help='Device to use (cpu/cuda/auto)')
 
     # On-policy algorithms (PPO, A2C)
-    parser.add_argument('--n-steps', type=int, default=2048, help='Number of steps per update')
-    parser.add_argument('--batch-size', type=int, default=64, help='Batch size')
-    parser.add_argument('--n-epochs', type=int, default=10, help='Number of epochs (PPO only)')
-    parser.add_argument('--gae-lambda', type=float, default=0.95, help='GAE lambda')
-    parser.add_argument('--ent-coef', type=float, default=0.0, help='Entropy coefficient')
-    parser.add_argument('--vf-coef', type=float, default=0.5, help='Value function coefficient')
-    parser.add_argument('--max-grad-norm', type=float, default=0.5, help='Max gradient norm')
-    parser.add_argument('--clip-range', type=float, default=0.2, help='PPO clip range')
+    parser.add_argument('--n-steps', type=int, default=2048,
+                        help='Number of steps per update')
+    parser.add_argument('--batch-size', type=int, default=64,
+                        help='Batch size')
+    parser.add_argument('--n-epochs', type=int, default=10,
+                        help='Number of epochs (PPO only)')
+    parser.add_argument('--gae-lambda', type=float, default=0.95,
+                        help='GAE lambda')
+    parser.add_argument('--ent-coef', type=float, default=0.0,
+                        help='Entropy coefficient')
+    parser.add_argument('--vf-coef', type=float, default=0.5,
+                        help='Value function coefficient')
+    parser.add_argument('--max-grad-norm', type=float, default=0.5,
+                        help='Max gradient norm')
+    parser.add_argument('--clip-range', type=float, default=0.2,
+                        help='PPO clip range')
 
     # Off-policy algorithms (DQN, SAC, TD3)
-    parser.add_argument('--buffer-size', type=int, default=1000000, help='Replay buffer size')
-    parser.add_argument('--learning-starts', type=int, default=100, help='Steps before learning')
-    parser.add_argument('--tau', type=float, default=0.005, help='Soft update coefficient')
-    parser.add_argument('--train-freq', type=int, default=1, help='Training frequency')
-    parser.add_argument('--gradient-steps', type=int, default=1, help='Gradient steps per update')
+    parser.add_argument('--buffer-size', type=int, default=1000000,
+                        help='Replay buffer size')
+    parser.add_argument('--learning-starts', type=int, default=100,
+                        help='Steps before learning')
+    parser.add_argument('--tau', type=float, default=0.005,
+                        help='Soft update coefficient')
+    parser.add_argument('--train-freq', type=int, default=1,
+                        help='Training frequency')
+    parser.add_argument('--gradient-steps', type=int, default=1,
+                        help='Gradient steps per update')
 
     # DQN specific
-    parser.add_argument('--target-update-interval', type=int, default=10000, help='Target network update interval')
-    parser.add_argument('--exploration-fraction', type=float, default=0.1, help='Exploration fraction')
-    parser.add_argument('--exploration-initial-eps', type=float, default=1.0, help='Initial exploration')
-    parser.add_argument('--exploration-final-eps', type=float, default=0.05, help='Final exploration')
+    parser.add_argument('--target-update-interval', type=int, default=10000,
+                        help='Target network update interval')
+    parser.add_argument('--exploration-fraction', type=float, default=0.1,
+                        help='Exploration fraction')
+    parser.add_argument('--exploration-initial-eps', type=float, default=1.0,
+                        help='Initial exploration')
+    parser.add_argument('--exploration-final-eps', type=float, default=0.05,
+                        help='Final exploration')
 
-    # Environment arguments
-    parser.add_argument('--episode-time', type=int, default=86400, help='Episode time in seconds for training')
-    parser.add_argument('--eval-time', type=int, default=86400, help='Evaluation time in seconds (default: 24 hours)')
-    parser.add_argument('--server-num', type=int, default=200, help='Number of servers')
-    parser.add_argument('--bernoulli-prob', type=float, default=0.12, help='Request arrival probability')
-    parser.add_argument('--time-interval', type=int, default=10, help='Time interval in milliseconds')
-    parser.add_argument('--max-wait-time', type=int, default=10, help='Max wait time in seconds')
-    parser.add_argument('--step-time', type=int, default=10, help='Time window per step in milliseconds (default 10 seconds)')
+    # Training monitoring
+    parser.add_argument('--eval-freq', type=int, default=10000,
+                        help='Evaluation frequency during training')
+    parser.add_argument('--n-eval-episodes', type=int, default=5,
+                        help='Number of evaluation episodes')
+    parser.add_argument('--save-freq', type=int, default=10000,
+                        help='Model save frequency')
 
-    # Evaluation arguments
-    parser.add_argument('--eval-freq', type=int, default=10000, help='Evaluation frequency during training')
-    parser.add_argument('--n-eval-episodes', type=int, default=5, help='Number of evaluation episodes')
-    parser.add_argument('--save-freq', type=int, default=10000, help='Model save frequency')
-    parser.add_argument('--save-path', type=str, default='../result/datacenter_models/', help='Model save path')
-    parser.add_argument('--log-path', type=str, default='../result/datacenter_logs/', help='Log path')
-
-    # Baseline agents to include
-    parser.add_argument('--baselines', nargs='+',
-                        # default=['all_fullkv', 'all_snapkv_64', 'rule_based_price', 'rule_based_deny', 'random'],
-                        default=['all_fullkv', 'all_snapkv_64', 'rule_based_price', 'random'],
-                        help='Baseline agents to evaluate')
+    # Paths
+    parser.add_argument('--save-path', type=str, default='../result/datacenter_models/',
+                        help='Model save path')
+    parser.add_argument('--log-path', type=str, default='../result/datacenter_logs/',
+                        help='Log path')
+    parser.add_argument('--experiment-name', type=str, default=None,
+                        help='Experiment name (default: timestamp)')
 
     args = parser.parse_args()
 
-    # Create timestamp for this run
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    args.save_path = os.path.join(args.save_path, timestamp)
-    args.log_path = os.path.join(args.log_path, timestamp)
+    # Create experiment directory
+    if args.experiment_name:
+        experiment_dir = args.experiment_name
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        experiment_dir = f"training_{timestamp}"
 
-    rl_agent = None
+    args.save_path = os.path.join(args.save_path, experiment_dir)
+    args.log_path = os.path.join(args.log_path, experiment_dir)
 
-    rl_agents = None
+    print("=" * 80)
+    print("LLM DATA CENTER RL AGENT TRAINING")
+    print("=" * 80)
+    print(f"Experiment: {experiment_dir}")
+    print(f"Algorithms: {', '.join(args.algorithms)}")
+    print(f"Total timesteps: {args.timesteps}")
+    print(f"Episode time: {args.episode_time} seconds")
+    print(f"Models will be saved to: {args.save_path}")
+    print("=" * 80)
 
-    # Train if requested
-    if args.train:
-        rl_agents = train_rl_agents(args)
+    # Train agents
+    trained_agents = train_rl_agents(args)
 
-    # Load model if specified
-    elif args.load_model:
-        print(f"\nLoading model from: {args.load_model}")
-        # Detect algorithm from path or use first specified
-        algorithm = args.algorithms[0]
-        for alg in ['PPO', 'A2C', 'DQN', 'SAC', 'TD3']:
-            if alg.lower() in args.load_model.lower():
-                algorithm = alg
-                break
+    # Quick evaluation if requested
+    if args.quick_eval:
+        print("\n" + "=" * 80)
+        print("QUICK EVALUATION RESULTS")
+        print("=" * 80)
 
-        agent = LLMDataCenterAgent(
-            algorithm=algorithm,
-            learning_rate=args.learning_rate,
-            gamma=args.gamma,
-            device=args.device
-        )
-        # Create dummy environment for loading
-        env = agent.create_env(enable_deny=args.enable_deny)
-        agent.load(args.load_model, env)
-        rl_agents = {algorithm: agent}
+        eval_results = {}
+        for algorithm, agent in trained_agents.items():
+            mean_reward, std_reward = quick_evaluation(agent, algorithm, args)
+            eval_results[algorithm] = (mean_reward, std_reward)
 
-    # Evaluate if requested
-    if args.evaluate:
-        # Prepare agents for evaluation
-        agents = {}
+        # Print summary
+        print(f"\n{'Algorithm':<15} {'Mean Reward':<15} {'Std Reward':<15}")
+        print("-" * 45)
+        for algorithm, (mean_rew, std_rew) in eval_results.items():
+            print(f"{algorithm:<15} {mean_rew:<15.3f} {std_rew:<15.3f}")
 
-        # Add baseline agents
-        for baseline_name in args.baselines:
-            try:
-                agents[baseline_name] = get_baseline_agent(baseline_name, enable_deny=args.enable_deny)
-            except ValueError as e:
-                print(f"Warning: {e}")
-
-        # Add RL agents if available
-        if 'rl_agents' in locals() and rl_agents is not None:
-            for alg_name, agent in rl_agents.items():
-                agents[f"RL_{alg_name}"] = agent.model
-
-        # Environment settings for evaluation (full 24-hour simulation)
-        eval_env_kwargs = {
-            'total_time': args.eval_time * 1000,
-            'time_interval': args.time_interval,
-            'server_num': args.server_num,
-            'bernoulli_prob': args.bernoulli_prob,
-            'max_wait_time': args.max_wait_time * 1000,
-            'step_time_ms': args.step_time * 1000,
-            'enable_deny': args.enable_deny
-        }
-
-        # Compare all agents
-        results = compare_agents(agents, eval_env_kwargs, n_episodes=args.n_eval_episodes)
-
-        # Plot comparison
-        plot_comparison(results, save_path=f"../result/comparison_{timestamp}.png")
-
-    # If neither train nor evaluate, just compare baseline agents
-    if not args.train and not args.evaluate:
-        print("\nNo action specified. Comparing baseline agents...")
-
-        agents = {}
-        for baseline_name in args.baselines:
-            try:
-                agents[baseline_name] = get_baseline_agent(baseline_name, enable_deny=args.enable_deny)
-            except ValueError as e:
-                print(f"Warning: {e}")
-
-        eval_env_kwargs = {
-            'total_time': args.eval_time * 1000,
-            'time_interval': args.time_interval,
-            'server_num': args.server_num,
-            'bernoulli_prob': args.bernoulli_prob,
-            'max_wait_time': args.max_wait_time * 1000,
-            'step_time_ms': args.step_time * 1000,
-            'enable_deny': args.enable_deny
-        }
-
-        results = compare_agents(agents, eval_env_kwargs, n_episodes=3)
-        plot_comparison(results, save_path=f"../result/comparison_{timestamp}.png")
+    print(f"\nTraining completed! Models saved in: {args.save_path}")
+    print("Use evaluate_datacenter_agent.py to run detailed evaluation and analysis.")
 
 
 if __name__ == "__main__":
