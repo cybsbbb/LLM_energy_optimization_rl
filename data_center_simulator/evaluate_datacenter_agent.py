@@ -462,7 +462,14 @@ def main():
     args = parser.parse_args()
 
     ### set for evaluation ###
-    args.load_models = "/Users/cybsbbbb/Documents/llm_energy_benchmark/result/datacenter_models/training_20250619_161545"
+    # args.load_models = "/Users/cybsbbbb/Documents/llm_energy_benchmark/result/datacenter_models/training_caiso"
+    # args.load_models = "/Users/cybsbbbb/Documents/llm_energy_benchmark/result/datacenter_models/training_pjm"
+
+    args.load_model = "/Users/cybsbbbb/Documents/llm_energy_benchmark/result/datacenter_models/training_20250620_111341/DQN/datacenter_DQN_1600000_steps.zip"
+    # args.load_model = "/Users/cybsbbbb/Documents/llm_energy_benchmark/result/datacenter_models/training_20250620_111341/DQN/best_model.zip"
+    # args.load_model = "/Users/cybsbbbb/Documents/llm_energy_benchmark/result/datacenter_models/training_caiso/PPO2/best_model.zip"
+    # args.load_model = "/Users/cybsbbbb/Documents/llm_energy_benchmark/result/datacenter_models/training_caiso/DQN/best_model.zip"
+    # args.load_model = "/Users/cybsbbbb/Documents/llm_energy_benchmark/result/datacenter_models/training_pjm/DQN/DQN_final_1000000.zip"
 
     # Create output directory
     os.makedirs(args.plot_dir, exist_ok=True)

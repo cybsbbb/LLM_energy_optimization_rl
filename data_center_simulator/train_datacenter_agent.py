@@ -201,10 +201,10 @@ def main():
     parser = argparse.ArgumentParser(description='Train RL agent for LLM Data Center optimization')
 
     # Core training arguments
-    parser.add_argument('--algorithms', nargs='+', default=['PPO', 'A2C', 'DQN', 'SAC'],
+    parser.add_argument('--algorithms', nargs='+', default=['TD3'],
                         choices=['PPO', 'A2C', 'DQN', 'SAC', 'TD3'],
                         help='RL algorithms to train')
-    parser.add_argument('--timesteps', type=int, default=1000000,
+    parser.add_argument('--timesteps', type=int, default=2000000,
                         help='Total training timesteps')
     parser.add_argument('--quick-eval', action='store_true',
                         help='Run quick evaluation after training')
@@ -216,7 +216,7 @@ def main():
                         help='Episode time in seconds for training (default: 4 hours)')
     parser.add_argument('--server-num', type=int, default=200,
                         help='Number of servers')
-    parser.add_argument('--bernoulli-prob', type=float, default=0.15,
+    parser.add_argument('--bernoulli-prob', type=float, default=0.12,
                         help='Request arrival probability')
     parser.add_argument('--time-interval', type=int, default=10,
                         help='Time interval in milliseconds')

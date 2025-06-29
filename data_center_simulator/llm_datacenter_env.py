@@ -5,7 +5,8 @@ from gymnasium import spaces
 from heapq import heappush, heappop
 from typing import Dict, Tuple, Optional, Any, List
 from data_center_simulator.simulate_data.gov_report.gov_report_sim_dataset import GovReportSimDataset
-from data_center_simulator.energy_price.caiso import data_20250421
+from data_center_simulator.energy_price.caiso_1day import data_20250421
+# from data_center_simulator.energy_price.pjm_1day import data_20250421
 from data_center_simulator.utils import setup_random, generate_bernoulli
 
 
