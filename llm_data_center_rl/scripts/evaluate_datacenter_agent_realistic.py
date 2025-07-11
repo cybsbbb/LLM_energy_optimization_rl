@@ -162,7 +162,7 @@ def evaluate_agent(agent, invocations_file: str, energy_price_file: str,
 
 def plot_action_timeline(loggers: Dict[str, RealisticActionLogger],
                          save_path: str = "../result/optimized_timeline.png",
-                         enable_deny: bool = True):
+                         enable_deny: bool = False):
     """Plot action selection over real time with energy prices and request rates."""
 
     action_names = {
@@ -173,7 +173,8 @@ def plot_action_timeline(loggers: Dict[str, RealisticActionLogger],
         action_names[6] = 'Deny'
 
     colors = plt.cm.viridis(np.linspace(0, 1, len(action_names)))
-    action_colors = {action: colors[i] for i, action in enumerate(action_names.keys())}
+    # action_colors = {action: colors[i] for i, action in enumerate(action_names.keys())}
+    action_colors = {0:colors[0], 1:colors[5], 2:colors[4], 3:colors[3], 4:colors[2], 5:colors[1]}
 
     n_agents = len(loggers)
     fig, axes = plt.subplots(n_agents + 2, 1, figsize=(20, 5 * (n_agents + 2)), sharex=True)
@@ -235,14 +236,6 @@ def plot_action_timeline(loggers: Dict[str, RealisticActionLogger],
                                for action in action_names.keys()]
             ax.legend(handles=legend_elements, bbox_to_anchor=(1.05, 1), loc='upper left')
 
-    # Format x-axis
-    axes[-1].set_xlabel('Time', fontsize=12)
-    for ax in axes:
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
-        ax.tick_params(axis='x', labelsize=10, rotation=45)
-
-    # plt.suptitle('Optimized Realistic Data Center Action Timeline', fontsize=16, fontweight='bold')
     plt.tight_layout()
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.show()
@@ -256,10 +249,12 @@ def plot_performance_comparison(results: Dict, save_path: str = "../result/optim
     if not results:
         return
 
-    metrics = ['Success Rate', 'Denial Rate', 'Average Score', 'episode_reward']
+    # metrics = ['Success Rate', 'Denial Rate', 'Average Score', 'episode_reward']
+    metrics = ['Success Rate', 'Average Latency (s)', 'Average Score', 'episode_reward', 'Total Energy Cost', 'Total Profit']
+
     n_agents = len(results)
 
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    fig, axes = plt.subplots(3, 2, figsize=(15, 15))
     axes = axes.flatten()
 
     for i, metric in enumerate(metrics):
@@ -268,9 +263,11 @@ def plot_performance_comparison(results: Dict, save_path: str = "../result/optim
         values = [results[agent].get(metric, 0) for agent in agent_names]
 
         bars = ax.bar(agent_names, values, alpha=0.7)
-        ax.set_title(f'{metric} (Optimized Environment)')
+        ax.set_title(f'{metric}')
         ax.set_ylabel(metric)
         ax.tick_params(axis='x', rotation=45)
+        if metric == 'episode_reward':
+            ax.set_ylim(bottom=45000)
         ax.grid(axis='y', alpha=0.3)
 
         # Add value labels on bars
@@ -415,7 +412,7 @@ def evaluate_multiple_agents(agents: Dict, invocations_file: str, energy_price_f
 
             # Timeline plot
             timeline_path = os.path.join(plot_dir, f"optimized_timeline_{period_name}_{timestamp}.png")
-            plot_action_timeline(period_loggers, timeline_path, enable_deny=True)
+            plot_action_timeline(period_loggers, timeline_path, enable_deny=False)
 
             # Comparison plot
             comparison_path = os.path.join(plot_dir, f"optimized_comparison_{period_name}_{timestamp}.png")
@@ -435,7 +432,7 @@ def main():
     # Model loading
     parser.add_argument('--load-models', type=str, help='Directory containing trained models')
     parser.add_argument('--load-model', type=str, help='Path to specific model file')
-    parser.add_argument('--algorithms', nargs='+', default=['PPO'],
+    parser.add_argument('--algorithms', nargs='+', default=['PPO', 'DQN', 'A2C'],
                         choices=['PPO', 'A2C', 'DQN', 'SAC', 'TD3'],
                         help='RL algorithms to evaluate')
     # Baseline agents
@@ -451,7 +448,7 @@ def main():
 
     args = parser.parse_args()
 
-    args.load_model = "../result/optimized_models/20250710_115349/PPO/PPO_optimized_realistic_200000.zip"
+    args.load_models = "../result/optimized_models/20250711_005407"
 
     # Create output directory
     os.makedirs(args.plot_dir, exist_ok=True)

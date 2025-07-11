@@ -24,8 +24,8 @@ class RealisticLLMDataCenterEnv(gym.Env):
 
     def __init__(self,
                  # Data file paths
-                 invocations_file: str = "../../data/LLM_inference_trace/processed/2024/invocations_ten_second_Coding.csv",
-                 energy_price_file: str = "../../data/energy_price/processed/CAISO_20240509_20240521.csv",
+                 invocations_file: str = "/home/cybsbbbb/llm_project/llm_energy_benchmark/llm_data_center_rl/data/LLM_inference_trace/processed/2024/invocations_ten_second_Coding.csv",
+                 energy_price_file: str = "/home/cybsbbbb/llm_project/llm_energy_benchmark/llm_data_center_rl/data/energy_price/processed/CAISO_20240509_20240521.csv",
                  # Environment parameters
                  server_num: int = 200,
                  max_wait_time: int = 10000,  # 10 seconds
@@ -425,7 +425,7 @@ class RealisticLLMDataCenterEnv(gym.Env):
         current_request_rate = self.get_current_request_rate(self.current_real_time)
 
         # Convert to requests per second
-        requests_per_second = current_request_rate / 500.0
+        requests_per_second = current_request_rate / 900.0
 
         # Generate requests using Poisson process
         # Probability of at least one request in this 1-second interval

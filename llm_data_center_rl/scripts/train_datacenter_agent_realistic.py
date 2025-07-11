@@ -202,7 +202,7 @@ def main():
     parser.add_argument('--algorithms', nargs='+', default=['PPO', 'A2C', 'DQN', 'SAC', 'TD3'],
                         choices=['PPO', 'A2C', 'DQN', 'SAC', 'TD3'],
                         help='RL algorithms to train')
-    parser.add_argument('--timesteps', type=int, default=1000000, help='Total training timesteps')
+    parser.add_argument('--timesteps', type=int, default=2000000, help='Total training timesteps')
     parser.add_argument('--learning-rate', type=float, default=3e-4, help='Learning rate')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor')
     parser.add_argument('--device', type=str, default='auto', help='Device to use (cpu/cuda/auto)')
@@ -246,9 +246,9 @@ def main():
     parser.add_argument('--exploration-final-eps', type=float, default=0.05, help='Final exploration')
 
     # Training monitoring
-    parser.add_argument('--eval-freq', type=int, default=10000, help='Evaluation frequency during training')
-    parser.add_argument('--n-eval-episodes', type=int, default=3, help='Number of evaluation episodes during training')
-    parser.add_argument('--save-freq', type=int, default=10000, help='Model save frequency')
+    parser.add_argument('--eval-freq', type=int, default=200000, help='Evaluation frequency during training')
+    parser.add_argument('--n-eval-episodes', type=int, default=1, help='Number of evaluation episodes during training')
+    parser.add_argument('--save-freq', type=int, default=200000, help='Model save frequency')
     parser.add_argument('--save-path', type=str, default='../result/optimized_models/', help='Model save path')
     parser.add_argument('--log-path', type=str, default='../result/optimized_logs/', help='Log path')
 
@@ -286,10 +286,6 @@ def main():
 
     if not os.path.exists(args.energy_price_file):
         print(f"❌ Error: Energy price file not found: {args.energy_price_file}")
-        return
-
-    if args.skip_training:
-        print("⏭️  Skipping training (--skip-training flag)")
         return
 
     # Train agents
