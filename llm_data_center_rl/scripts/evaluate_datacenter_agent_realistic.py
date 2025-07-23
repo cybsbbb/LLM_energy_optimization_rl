@@ -307,7 +307,7 @@ def load_optimized_agents(model_dir: str, algorithms: List[str], enable_deny: bo
                 # Create dummy environment for loading
                 if algorithm in ['SAC', 'TD3']:
                     dummy_env = RealisticLLMDataCenterEnv(
-                        invocations_file="../data/LLM_inference_trace/processed/2024/invocations_ten_second_Coding.csv",
+                        invocations_file="../data/llm_inference_trace/processed/2024/invocations_ten_second_Coding.csv",
                         energy_price_file="../data/energy_price/processed/CAISO_20240509_20240521.csv",
                         simulation_duration_hours=1,
                         enable_deny=enable_deny
@@ -316,7 +316,7 @@ def load_optimized_agents(model_dir: str, algorithms: List[str], enable_deny: bo
                     env = SafeMonitor(wrapped_env)
                 else:
                     env = RealisticLLMDataCenterEnv(
-                        invocations_file="../data/LLM_inference_trace/processed/2024/invocations_ten_second_Coding.csv",
+                        invocations_file="../data/llm_inference_trace/processed/2024/invocations_ten_second_Coding.csv",
                         energy_price_file="../data/energy_price/processed/CAISO_20240509_20240521.csv",
                         simulation_duration_hours=1,
                         enable_deny=enable_deny

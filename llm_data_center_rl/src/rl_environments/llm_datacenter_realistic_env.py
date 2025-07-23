@@ -10,7 +10,7 @@ import os
 import time
 import bisect
 import traceback
-from kv_compression_simulate_data.gov_report.gov_report_sim_dataset import GovReportSimDataset
+from datasets.gov_report_sim_dataset import GovReportSimDataset
 from utils.utils import setup_random, generate_bernoulli
 
 
@@ -729,7 +729,7 @@ if __name__ == "__main__":
     try:
         # Create optimized environment
         env = RealisticLLMDataCenterEnv(
-            invocations_file="../../data/LLM_inference_trace/processed/2024/invocations_ten_second_Coding.csv",
+            invocations_file="../../data/llm_inference_trace/processed/2024/invocations_ten_second_Coding.csv",
             energy_price_file="../../data/energy_price/processed/CAISO_20240509_20240521.csv",
             simulation_start_time="2024-05-10 00:00:00",
             simulation_duration_hours=2,  # 2 hours for testing

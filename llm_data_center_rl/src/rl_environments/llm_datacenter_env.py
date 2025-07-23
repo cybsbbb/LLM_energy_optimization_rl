@@ -4,7 +4,7 @@ import gymnasium as gym
 from gymnasium import spaces
 from heapq import heappush, heappop
 from typing import Dict, Tuple, Optional, Any, List
-from kv_compression_simulate_data.gov_report.gov_report_sim_dataset import GovReportSimDataset
+from datasets.gov_report_sim_dataset import GovReportSimDataset
 from llm_data_center_rl.data.energy_price.sample_1day.caiso_1day import caiso_data_20250421
 # from llm_data_center_rl.data.energy_price.sample_1day.pjm_1day import pjm_data_20250421
 from utils.utils import setup_random, generate_bernoulli

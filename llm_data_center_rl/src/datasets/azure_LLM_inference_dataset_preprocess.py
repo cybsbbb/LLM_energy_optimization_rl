@@ -1,14 +1,13 @@
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
 import os
+import pandas as pd
+import matplotlib.pyplot as plt
 
 
 def get_invocations_per_second(df, freq='1s'):
     df_copy = df.copy()
     df_copy["Time"] = df_copy["TIMESTAMP"].dt.round(freq=freq)
-    df_res = df_copy.groupby("Time").count()["TIMESTAMP"]
-    return df_res
+    df_final = df_copy.groupby("Time").count()["TIMESTAMP"]
+    return df_final
 
 
 if __name__ == "__main__":
@@ -28,7 +27,7 @@ if __name__ == "__main__":
         df_traces[trace_name] = pd.read_csv(trace_filename, parse_dates=["TIMESTAMP"])
         df_res = get_invocations_per_second(df_traces[trace_name], freq='1s')
         # save to csv
-        filepath = f"../../data/LLM_inference_trace/processed/2023/invocations_per_second_{trace_name}.csv"
+        filepath = f"../../data/llm_inference_trace/processed/2023/invocations_per_second_{trace_name}.csv"
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df_res.to_csv(filepath, index=True)
         # save plot
@@ -43,7 +42,7 @@ if __name__ == "__main__":
         df_traces[trace_name] = pd.read_csv(trace_filename, parse_dates=["TIMESTAMP"])
         df_res = get_invocations_per_second(df_traces[trace_name], freq='10s')
         # save to csv
-        filepath = f"../../data/LLM_inference_trace/processed/2023/invocations_ten_second_{trace_name}.csv"
+        filepath = f"../../data/llm_inference_trace/processed/2023/invocations_ten_second_{trace_name}.csv"
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df_res.to_csv(filepath, index=True)
         # save plot
@@ -64,7 +63,7 @@ if __name__ == "__main__":
         df_traces[trace_name] = pd.read_csv(trace_filename, parse_dates=["TIMESTAMP"], date_format="mixed", dayfirst=False)
         df_res = get_invocations_per_second(df_traces[trace_name], freq='1s')
         # save to csv
-        filepath = f"../../data/LLM_inference_trace/processed/2024/invocations_per_second_{trace_name}.csv"
+        filepath = f"../../data/llm_inference_trace/processed/2024/invocations_per_second_{trace_name}.csv"
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df_res.to_csv(filepath, index=True, date_format='%Y-%m-%d %H:%M:%S')
         # save plot
@@ -76,11 +75,10 @@ if __name__ == "__main__":
     # Read all traces (10s)
     df_traces = {}
     for trace_name, trace_filename in zip(TRACE_NAMES, TRACE_FILENAMES):
-        df_traces[trace_name] = pd.read_csv(trace_filename, parse_dates=["TIMESTAMP"], date_format="mixed",
-                                            dayfirst=False)
+        df_traces[trace_name] = pd.read_csv(trace_filename, parse_dates=["TIMESTAMP"], date_format="mixed", dayfirst=False)
         df_res = get_invocations_per_second(df_traces[trace_name], freq='10s')
         # save to csv
-        filepath = f"../../data/LLM_inference_trace/processed/2024/invocations_ten_second_{trace_name}.csv"
+        filepath = f"../../data/llm_inference_trace/processed/2024/invocations_ten_second_{trace_name}.csv"
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         df_res.to_csv(filepath, index=True, date_format='%Y-%m-%d %H:%M:%S')
         # save plot
