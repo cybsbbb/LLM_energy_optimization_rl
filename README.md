@@ -1,4 +1,4 @@
-# LLM Data Center RL
+# Energy Optimization for Data Center LLM Serving by Reinforcement Learning
 
 A comprehensive reinforcement learning framework for optimizing KV-cache compression strategies in Large Language Model data centers.
 
