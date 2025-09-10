@@ -54,3 +54,7 @@ if __name__ == "__main__":
     preprocess_csv(csv_file_path='../../data/energy_price/raw/CAISO_20240509_20240521.csv',
                    preprocessed_file_path='../../data/energy_price/processed/CAISO_20240509_20240521.csv',
                    plot_file_path='../../data/energy_price/processed/CAISO_20240509_20240521.png')
+    # sample-1-day
+    preprocess_csv(csv_file_path='../../data/energy_price/raw/20250421_20250422_PRC_INTVL_LMP_RTM_20250422_20_42_08_v3.csv',
+                   preprocessed_file_path='../../data/energy_price/processed/CAISO_20250421_20250422.csv',
+                   plot_file_path='../../data/energy_price/processed/CAISO_20250421_20250422.png')

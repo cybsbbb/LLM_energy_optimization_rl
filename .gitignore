@@ -173,7 +173,9 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-result/
-*raw/
+results/
+**/raw/
 
-*.DS_Store
+.DS_Store
+**.DS_Store
+
