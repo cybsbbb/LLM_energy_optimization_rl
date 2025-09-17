@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
@@ -45,6 +46,17 @@ class Evaluator:
             episode_reward += reward
             done = terminated or truncated
 
+            # For continuous algorithms, convert back to discrete. (I am super silly on this part)
+            if isinstance(agent, RLAgent) and agent.algorithm in ['SAC', 'TD3']:
+                if isinstance(action, np.ndarray):
+                    action_value = action[0]
+                else:
+                    action_value = action
+                action_value = np.clip(action_value, -1.0, 1.0)
+                n_actions = 7 if agent.enable_deny else 6
+                discrete_action = int((action_value + 1) * n_actions / 2)
+                action = int(np.clip(discrete_action, 0, n_actions - 1))
+
             # Log step data
             current_time = env.get_wrapper_attr("current_real_time")
             energy_price = env.get_wrapper_attr("data_provider").get_energy_price(current_time)
@@ -77,7 +89,8 @@ class Evaluator:
 
         self.logger.info(f"{agent_name} evaluation completed: "
                          f"Reward={episode_reward:.3f}, "
-                         f"Success Rate={summary.get('Success Rate', 0):.3f}")
+                         f"Success Rate={summary.get('Success Rate', 0):.3f}, "
+                         f"Total Steps={summary.get('total_steps', 0):.3f}, ")
 
         return summary, logger
 
@@ -126,8 +139,9 @@ class Evaluator:
                 self.logger.warning(f"No trained model found for {algorithm}")
                 continue
 
-            # Look for final model
-            model_files = [f for f in os.listdir(algorithm_dir) if f.endswith('.zip') and 'final' in f]
+            # Look for best model
+            model_files = [f for f in os.listdir(algorithm_dir) if f.endswith('.zip') and 'best' in f]
+            # model_files = [f for f in os.listdir(algorithm_dir) if f.endswith('.zip') and 'final' in f]
             if not model_files:
                 model_files = [f for f in os.listdir(algorithm_dir) if f.endswith('.zip')]
 

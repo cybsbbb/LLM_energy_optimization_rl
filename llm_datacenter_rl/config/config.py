@@ -127,10 +127,10 @@ class ExperimentConfig:
 
     # Algorithms to train/evaluate
     algorithms: List[str] = field(default_factory=lambda: ['PPO', 'A2C', 'DQN', 'SAC', 'TD3'])
-    baseline_agents: List[str] = field(default_factory=lambda: [
-        "all_fullkv", "all_snapkv_64", "rule_based_price", "random"
-    ])
+    baseline_agents: List[str] = field(default_factory=lambda: ["all_fullkv", "all_snapkv_64", "rule_based_price"])
+
     # debug use
+    # algorithms: List[str] = field(default_factory=lambda: ['PPO', 'SAC', 'TD3'])
     # baseline_agents: List[str] = field(default_factory=lambda: [])
 
     def get_output_paths(self) -> Dict[str, str]:

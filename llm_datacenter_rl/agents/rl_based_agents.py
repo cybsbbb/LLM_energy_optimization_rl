@@ -175,22 +175,8 @@ class RLAgent(BaseAgent):
         """Make a prediction."""
         if self.model is None:
             raise ValueError("Model not created. Call create_model() first.")
-
         action, _ = self.model.predict(observation, deterministic=deterministic)
-
-        # For continuous algorithms, convert back to discrete
-        if self.algorithm in ['SAC', 'TD3']:
-            if isinstance(action, np.ndarray):
-                action_value = action[0]
-            else:
-                action_value = action
-
-            action_value = np.clip(action_value, -1.0, 1.0)
-            n_actions = 7 if self.enable_deny else 6
-            discrete_action = int((action_value + 1) * n_actions / 2)
-            action = np.clip(discrete_action, 0, n_actions - 1)
-
-        return int(action)
+        return action
 
     def save(self, path: str):
         """Save the model."""
