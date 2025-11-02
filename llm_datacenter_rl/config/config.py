@@ -56,7 +56,7 @@ class TrainingConfig:
 
     # Training parameters
     total_timesteps: int = 1000000
-    learning_rate: float = 3e-4
+    learning_rate: float = 5e-4
     gamma: float = 0.99
     device: str = "auto"
 
@@ -127,10 +127,10 @@ class ExperimentConfig:
 
     # Algorithms to train/evaluate
     algorithms: List[str] = field(default_factory=lambda: ['PPO', 'A2C', 'DQN', 'SAC', 'TD3'])
-    baseline_agents: List[str] = field(default_factory=lambda: ["all_fullkv", "all_snapkv_64", "rule_based_price"])
+    baseline_agents: List[str] = field(default_factory=lambda: ["all_fullkv", "all_snapkv_64"])
 
     # debug use
-    # algorithms: List[str] = field(default_factory=lambda: ['PPO', 'SAC', 'TD3'])
+    # algorithms: List[str] = field(default_factory=lambda: ['PPO'])
     # baseline_agents: List[str] = field(default_factory=lambda: [])
 
     def get_output_paths(self) -> Dict[str, str]:
@@ -165,7 +165,7 @@ DEFAULT_CONFIGS = {
     ),
 
     "realistic_mode": ExperimentConfig(
-        training=TrainingConfig(total_timesteps=12000000, eval_freq=200000),
+        training=TrainingConfig(total_timesteps=20000000, eval_freq=1000000),
         environment=EnvironmentConfig(
             simulation_duration_hours=24 * 7,  # 1 week
             server_num=200,

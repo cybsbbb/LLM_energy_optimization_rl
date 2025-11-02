@@ -479,8 +479,9 @@ class LLMDataCenterEnv(gym.Env):
             "Timeout Rate": self.timeout_request_num / total_requests if total_requests > 0 else 0,
             "Average Latency (s)": (self.total_latency / self.latency_count) / 1000 if self.latency_count > 0 else 0,
             "Average Score": (self.total_score / self.score_count) * 100 if self.score_count > 0 else 0,
-            "Total Energy (J)": self.tot_energy,
-            "Total Energy Cost": self.tot_energy_cost * self.config.pue / self.j2mwh,
+            "Total Energy (J)": self.tot_energy * 10,
+            "Total Energy (MW)": self.tot_energy * 10 / self.j2mwh,
+            "Total Energy Cost": self.tot_energy_cost * 10,
             "Total Profit": self.success_request_num / 1000 * 0.02,
             "episode_reward": self.episode_reward,
             "Action Statistics": {}

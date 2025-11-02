@@ -37,11 +37,12 @@ def main():
     # Algorithm and baseline selection
     parser.add_argument('--algorithms', nargs='+',
                         # choices=['PPO', 'A2C', 'DQN', 'SAC', 'TD3'],
-                        choices=['PPO', 'SAC'],
+                        # choices=['PPO', 'SAC'],
+                        choices=['PPO'],
                         help='RL algorithms to evaluate')
     parser.add_argument('--baselines', nargs='+',
                         # choices=['all_fullkv', 'all_snapkv_64', 'rule_based_price', 'smart_deny', 'adaptive_load', 'random'],
-                        choices=[],
+                        choices=['all_fullkv', 'all_snapkv_64', 'rule_based_price'],
                         help='Baseline agents to evaluate')
 
     # Override environment parameters

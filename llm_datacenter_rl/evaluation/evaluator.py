@@ -3,6 +3,8 @@ import numpy as np
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
+from tensorboard import summary
+
 from ..config.config import ExperimentConfig, EvaluationConfig
 from ..environments.environment import LLMDataCenterEnv
 from ..agents.rl_based_agents import get_rl_agent, RLAgent
@@ -35,7 +37,7 @@ class Evaluator:
 
         logger = ActionTimeLogger()
 
-        obs, _ = env.reset()
+        obs, _ = env.reset(seed=114514)
         done = False
         episode_reward = 0
         step_count = 0
@@ -62,6 +64,7 @@ class Evaluator:
             energy_price = env.get_wrapper_attr("data_provider").get_energy_price(current_time)
             processing_ratio = env.get_wrapper_attr("processing_server_num") / env.get_wrapper_attr("config").server_num
             waiting_ratio = len(env.get_wrapper_attr("waiting_queue")) / env.get_wrapper_attr("config").server_num
+            current_request_rate = env.get_wrapper_attr("data_provider").get_request_rate(env.get_wrapper_attr("current_real_time"))
 
             # current_time = env.current_real_time
             # energy_price = env.data_provider.get_energy_price(current_time)
@@ -70,7 +73,7 @@ class Evaluator:
 
             logger.log_step(
                 current_time, action, energy_price,
-                processing_ratio, waiting_ratio, reward
+                processing_ratio, waiting_ratio, reward, current_request_rate
             )
 
             step_count += 1
@@ -188,7 +191,7 @@ class Evaluator:
         self.logger.info("=" * 80)
 
         # Key metrics for comparison
-        metrics = ['Success Rate', 'Denial Rate', 'Average Score', 'episode_reward', 'Total Profit']
+        metrics = ['Success Rate', 'Average Score', 'Total Energy (MW)', 'Total Energy Cost', 'episode_reward']
 
         # Print header
         header = f"{'Agent':<20}"

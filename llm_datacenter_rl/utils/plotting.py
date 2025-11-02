@@ -20,9 +20,10 @@ class ActionTimeLogger:
         self.processing_ratios = []
         self.waiting_ratios = []
         self.rewards = []
+        self.request_rate = []
 
     def log_step(self, time: datetime, action: int, energy_price: float,
-                 processing_ratio: float, waiting_ratio: float, reward: float):
+                 processing_ratio: float, waiting_ratio: float, reward: float, request_rate: float):
         """Log a single step."""
         self.times.append(time)
         self.actions.append(action)
@@ -30,6 +31,7 @@ class ActionTimeLogger:
         self.processing_ratios.append(processing_ratio)
         self.waiting_ratios.append(waiting_ratio)
         self.rewards.append(reward)
+        self.request_rate.append(request_rate)
 
     def get_data(self):
         """Get all logged data."""
@@ -39,7 +41,8 @@ class ActionTimeLogger:
             'energy_prices': np.array(self.energy_prices),
             'processing_ratios': np.array(self.processing_ratios),
             'waiting_ratios': np.array(self.waiting_ratios),
-            'rewards': np.array(self.rewards)
+            'rewards': np.array(self.rewards),
+            'request_rate': np.array(self.request_rate)
         }
 
 
@@ -47,22 +50,25 @@ def plot_action_timeline(loggers: Dict[str, ActionTimeLogger],
                          save_path: str, enable_deny: bool = True):
     """Plot action selection over time with energy price for multiple agents."""
 
-    # Action names and colors
+    # Action names in sequential order (most to least resources)
     action_names = {
-        0: 'FullKV', 1: 'SnapKV-64', 2: 'SnapKV-128',
-        3: 'SnapKV-256', 4: 'SnapKV-512', 5: 'SnapKV-1024'
+        0: 'FullKV',
+        5: 'SnapKV-1024',
+        4: 'SnapKV-512',
+        3: 'SnapKV-256',
+        2: 'SnapKV-128',
+        1: 'SnapKV-64'
     }
     if enable_deny:
         action_names[6] = 'Deny'
 
-    colors = plt.cm.viridis(np.linspace(0, 1, len(action_names)))
+    # Use YlOrBr sequential colormap
+    # colors = plt.cm.viridis(np.linspace(0.1, 0.9, len(action_names)))
+    colors = plt.cm.Oranges(np.linspace(1.0, 0.2, len(action_names)))
     action_colors = {action: colors[i] for i, action in enumerate(action_names.keys())}
 
     n_agents = len(loggers)
-    fig, axes = plt.subplots(n_agents + 1, 1, figsize=(15, 4 * (n_agents + 1)), sharex=True)
-
-    if n_agents == 1:
-        axes = [axes] if not isinstance(axes, list) else axes
+    fig, axes = plt.subplots(n_agents + 2, 1, figsize=(15, 4 * (n_agents + 1)), sharex=True)
 
     # Get reference data from first agent
     first_logger = list(loggers.values())[0]
@@ -70,15 +76,25 @@ def plot_action_timeline(loggers: Dict[str, ActionTimeLogger],
 
     # Plot energy price on top subplot
     ax_energy = axes[0]
-    ax_energy.plot(ref_data['times'], ref_data['energy_prices'], 'r-', linewidth=2, label='Energy Price')
-    ax_energy.set_ylabel('Energy Price\n($/MWh)', fontsize=12)
-    ax_energy.set_title('Energy Price Over Time', fontsize=14, fontweight='bold')
+    ax_energy.plot(ref_data['times'], ref_data['energy_prices'], linewidth=2,
+                   label='Energy Price', color='goldenrod')
+    ax_energy.set_ylabel('Energy Price\n($/MWh)', fontsize=16)
+    ax_energy.set_title('Energy Price Over Time', fontsize=16, fontweight='bold')
     ax_energy.grid(True, alpha=0.3)
-    ax_energy.legend()
+    ax_energy.legend(loc='lower left', fontsize=16)
+
+    # Plot request rate
+    ax_request = axes[1]
+    ax_request.plot(ref_data['times'], ref_data['request_rate'], linewidth=2,
+                    label='Request Rate', color='olivedrab')
+    ax_request.set_ylabel('Request Rate\n(req/s)', fontsize=16)
+    ax_request.set_title('Request Rate Over Time', fontsize=16, fontweight='bold')
+    ax_request.grid(True, alpha=0.3)
+    ax_request.legend(loc='upper left', fontsize=16)
 
     # Plot actions for each agent
     for i, (agent_name, logger) in enumerate(loggers.items()):
-        ax = axes[i + 1]
+        ax = axes[i + 2]
         data = logger.get_data()
 
         # Create action timeline as colored segments
@@ -96,23 +112,29 @@ def plot_action_timeline(loggers: Dict[str, ActionTimeLogger],
             )
             ax.add_patch(rect)
 
-        ax.set_ylabel(f'{agent_name}\nAction', fontsize=12)
+        ax.set_ylabel(f'{agent_name}\nAction', fontsize=16)
         ax.set_ylim(-0.5, 0.5)
         ax.set_yticks([])
+        ax.tick_params(axis='x', labelsize=12)
         ax.grid(True, alpha=0.3, axis='x')
 
-        # Add legend for last subplot
-        if i == len(loggers) - 1:
-            legend_elements = [Rectangle((0, 0), 1, 1, facecolor=action_colors[action],
-                                         label=action_names[action])
-                               for action in action_names.keys()]
-            ax.legend(handles=legend_elements, bbox_to_anchor=(1.05, 1), loc='upper left')
+    # Add legend at the bottom of the figure
+    legend_elements = [Rectangle((0, 0), 1, 1, facecolor=action_colors[action],
+                                 edgecolor='black', linewidth=0.5, label=action_names[action])
+                       for action in action_names.keys()]
+
+    fig.legend(handles=legend_elements,
+               loc='lower center',
+               ncol=len(action_names),
+               frameon=True,
+               fontsize=14,
+               bbox_to_anchor=(0.5, -0.05))
 
     # Format x-axis
-    axes[-1].set_xlabel('Time', fontsize=12)
-    fig.autofmt_xdate()
+    # axes[-1].set_xlabel('Time', fontsize=12, rotation=0)
+    fig.autofmt_xdate(rotation=0)
 
-    plt.suptitle('Action Selection Timeline with Energy Price', fontsize=16, fontweight='bold')
+    # plt.suptitle('Action Selection Timeline with Energy Price', fontsize=16, fontweight='bold')
     plt.tight_layout()
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
